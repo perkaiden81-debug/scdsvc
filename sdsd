@@ -38,6 +38,8 @@ if oldKeyGui then
 end
 
 
+
+
 -------------------------------------------------------------------------------
 --  1. Tworzenie Głównego UI
 -------------------------------------------------------------------------------
@@ -145,7 +147,7 @@ contentLayout.Parent = contentFrame
 
 
 -------------------------------------------------------------------------------
---  2. Перетаскивание окна
+--  2. tragerea ferestrei
 -------------------------------------------------------------------------------
 do
     local dragging = false
@@ -195,7 +197,7 @@ end
 
 
 -------------------------------------------------------------------------------
---  3. Клавиша [K] для показа/скрытия
+--  3. Tasta [K] pentru afișare/ascundere
 -------------------------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if not gameProcessedEvent then
@@ -207,7 +209,7 @@ end)
 
 
 -------------------------------------------------------------------------------
---  4. Объявляем все переменные и функции скриптов
+--  4. Declarăm toate variabilele și funcțiile
 -------------------------------------------------------------------------------
 
 --======================= NO FAIL LOCKPICK =========================--
@@ -283,90 +285,93 @@ function NoFailLockpick_Disable()
 end
 
 --======================= SAFE/REGISTER ESP =========================--
-
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Player = game:GetService("Players").LocalPlayer
 
 local BredMakurz_Enabled = false
 local bredMakurzConnection = nil
+local safeTimers = {} -- Tabel pentru cronometru
 
 local function formatName(name)
     name = string.gsub(name, "([a-z])([A-Z])", "%1 %2")
-    
     local underscoreIndex = string.find(name, "_")
     if underscoreIndex then
         name = string.sub(name, 1, underscoreIndex - 1)
     end
-    
     return name
 end
 
-local function ApplyBredMakurzModification()
+local function ApplyBredMakurzModification(delta)
     local bredMakurzFolder = Workspace.Map:FindFirstChild("BredMakurz")
     if not bredMakurzFolder then return end
 
-    local character = Player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local playerPosition = character.HumanoidRootPart.Position
-
     for _, v in pairs(bredMakurzFolder:GetChildren()) do
-        local objectPosition
-        if v.PrimaryPart and v.PrimaryPart:IsA("BasePart") then
-            objectPosition = v.PrimaryPart.Position
-        else
-            local part = v:FindFirstChildOfClass("BasePart")
-            if part then
-                objectPosition = part.Position
-            else
-                continue 
-            end
-        end
+        local values = v:FindFirstChild("Values")
+        local brokenValue = values and values:FindFirstChild("Broken")
         
-        local distance = (objectPosition - playerPosition).magnitude
+        -- Detectăm starea seifului
+        local isBroken = false
+        if brokenValue then
+            isBroken = brokenValue.Value
+        elseif v:FindFirstChild("Interact") then
+            isBroken = v.Interact:GetAttribute("Broken") == true
+        end
+
         local existingGui = v:FindFirstChild("Ahh")
 
-        if distance <= 200 then
+        -- Eliminăm orice Highlight (Chams) dacă a rămas din greșeală
+        if v:FindFirstChild("EspHighlight") then
+            v.EspHighlight:Destroy()
+        end
+
+        if isBroken then
+            -- Pornim timer-ul de 12 minute (720 secunde)
+            if not safeTimers[v.Name] then
+                safeTimers[v.Name] = 720 
+            end
+
+            -- Scădem timpul real
+            if safeTimers[v.Name] > 0 then
+                safeTimers[v.Name] = safeTimers[v.Name] - delta
+            end
+
+            if existingGui then
+                local label = existingGui:FindFirstChildOfClass("TextLabel")
+                if label then
+                    local p = safeTimers[v.Name]
+                    local minutes = math.floor(p / 60)
+                    local seconds = math.floor(p % 60)
+                    -- Afișăm doar timer-ul când e spart
+                    label.Text = string.format("%s\n[COOLDOWN]\n%02d:%02d", formatName(v.Name), minutes, seconds)
+                    label.TextColor3 = Color3.fromRGB(255, 100, 0) -- Portocaliu
+                end
+            end
+        else
+            -- SEIFUL E READY
+            safeTimers[v.Name] = nil 
+
             if not existingGui then
-                local x = Instance.new('BillboardGui', v)
-                x.Name = "Ahh"
-                x.AlwaysOnTop = true
-                x.Size = UDim2.new(8,0,4,0) 
-                x.MaxDistance = 200 
+                existingGui = Instance.new('BillboardGui', v)
+                existingGui.Name = "Ahh"
+                existingGui.AlwaysOnTop = true
+                existingGui.Size = UDim2.new(0, 100, 0, 50)
+                existingGui.MaxDistance = math.huge -- DISTANȚĂ INFINITĂ
+                existingGui.StudsOffset = Vector3.new(0, 4, 0)
                 
-                local textLabel = Instance.new('TextLabel', x)
+                local textLabel = Instance.new('TextLabel', existingGui)
                 textLabel.Size = UDim2.new(1,0,1,0)
                 textLabel.BackgroundTransparency = 1
                 textLabel.Font = Enum.Font.SourceSansBold
-                textLabel.TextScaled = false 
-                textLabel.TextSize = 15 
-                
-                textLabel.Text = formatName(v.Name) 
-                x.Adornee = v
-                
-                local values = v:FindFirstChild("Values")
-                local brokenValue = values and values:FindFirstChild("Broken")
-                if brokenValue then
-                    if brokenValue.Value ~= false then
-                        textLabel.TextColor3 = Color3.new(255,0,0) 
-                    else
-                        textLabel.TextColor3 = Color3.new(0,255,0) 
-                    end
-
-                    brokenValue:GetPropertyChangedSignal("Value"):Connect(function()
-                        if brokenValue.Value ~= false then
-                            textLabel.TextColor3 = Color3.new(255,0,0)
-                        else
-                            textLabel.TextColor3 = Color3.new(0,255,0)
-                        end
-                    end)
-                else
-                    textLabel.TextColor3 = Color3.new(0,255,0)
-                end
+                textLabel.TextSize = 14
+                textLabel.TextStrokeTransparency = 0
             end
-        elseif existingGui then
-            existingGui:Destroy()
+
+            local label = existingGui:FindFirstChildOfClass("TextLabel")
+            if label then
+                label.Text = formatName(v.Name) .. "\n[READY]"
+                label.TextColor3 = Color3.fromRGB(0, 255, 0) -- Verde
+            end
         end
     end
 end
@@ -374,9 +379,14 @@ end
 function BredMakurz_Enable()
     if BredMakurz_Enabled then return end 
     BredMakurz_Enabled = true
-
+    
+    local lastTime = tick()
     bredMakurzConnection = RunService.Heartbeat:Connect(function()
-        ApplyBredMakurzModification()
+        local currentTime = tick()
+        local delta = currentTime - lastTime
+        lastTime = currentTime
+        
+        ApplyBredMakurzModification(delta)
     end)
 end
 
@@ -389,18 +399,17 @@ function BredMakurz_Disable()
         bredMakurzConnection = nil
     end
 
+    safeTimers = {}
+
     local bredMakurzFolder = Workspace.Map:FindFirstChild("BredMakurz")
     if bredMakurzFolder then
         for _, v in pairs(bredMakurzFolder:GetChildren()) do
-            pcall(function()
-                if v:FindFirstChild("Ahh") then
-                    v.Ahh:Destroy()
-                end
-            end)
+            if v:FindFirstChild("Ahh") then v.Ahh:Destroy() end
+            -- Curățăm și eventualele Highlight-uri rămase
+            if v:FindFirstChild("EspHighlight") then v.EspHighlight:Destroy() end
         end
     end
 end
-
 --======================= OPEN/UNLOCK NEARBY DOORS =========================--
 
 local OpenNearbyDoors_Enabled = false
@@ -1694,7 +1703,7 @@ localPlayer.CharacterAdded:Connect(function(character)
 end)
 
 -- =================================================================================
--- --- ФУНКЦИЯ ТЕЛЕПОРТАЦИИ ---
+-- --- Funcția de teleportare ---
 -- =================================================================================
 
 local function teleportTo(targetPart)
@@ -1743,7 +1752,7 @@ local function teleportTo(targetPart)
 end
 
 -- =================================================================================
--- --- ФУНКЦИИ ДЛЯ АВТОФАРМА ---
+-- --- Funcții pentru autofarm ---
 -- =================================================================================
 
 local function hasTool(toolName)
@@ -1808,64 +1817,8 @@ local function findNearestDealer()
 end
 
 -- =================================================================================
--- --- ФУНКЦИЯ МИКРО-ШАГА (WASD) - УЛУЧШЕННАЯ ---
+-- --- Funcția openSafe cu micro-pas la spargere ---
 -- =================================================================================
-
-local function doMicroStep()
-    if not autofarmEnabled then return end
-    
-    local char = localPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if hrp then
-        -- БОЛЬШЕ НАПРАВЛЕНИЙ (8 направлений как WASD + диагонали)
-        local directions = {
-            hrp.CFrame.LookVector * 0.3,                    -- W (вперед)
-            -hrp.CFrame.LookVector * 0.3,                   -- S (назад)
-            hrp.CFrame.RightVector * 0.3,                    -- D (вправо)
-            -hrp.CFrame.RightVector * 0.3,                   -- A (влево)
-            (hrp.CFrame.LookVector + hrp.CFrame.RightVector) * 0.25,  -- WD (диагональ)
-            (hrp.CFrame.LookVector - hrp.CFrame.RightVector) * 0.25,  -- WA (диагональ)
-            (-hrp.CFrame.LookVector + hrp.CFrame.RightVector) * 0.25, -- SD (диагональ)
-            (-hrp.CFrame.LookVector - hrp.CFrame.RightVector) * 0.25, -- SA (диагональ)
-            
-            -- Добавляем еще вариации с разной амплитудой
-            hrp.CFrame.LookVector * 0.2,
-            -hrp.CFrame.LookVector * 0.2,
-            hrp.CFrame.RightVector * 0.2,
-            -hrp.CFrame.RightVector * 0.2,
-            hrp.CFrame.LookVector * 0.4,
-            hrp.CFrame.RightVector * 0.4
-        }
-        
-        -- Случайное направление
-        local move = directions[math.random(1, #directions)]
-        
-        -- Применяем микро-шаг
-        hrp.CFrame = hrp.CFrame + move
-        task.wait(0.1)
-        
-        -- Иногда делаем двойной шаг
-        if math.random(1, 3) == 1 then
-            hrp.CFrame = hrp.CFrame + move * 0.5
-            task.wait(0.1)
-        end
-        
-        -- Почти возвращаемся обратно (оставляем небольшое смещение)
-        hrp.CFrame = hrp.CFrame - move * 0.6
-        task.wait(0.1)
-        
-        -- Иногда добавляем поворот
-        if math.random(1, 5) == 1 then
-            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(math.random(-15, 15)), 0)
-        end
-    end
-end
-
--- =================================================================================
--- --- ФУНКЦИЯ openSafe С МИКРО-ШАГОМ ПРИ ПОЛОМКЕ ---
--- =================================================================================
-
 local function openSafe(safeModel)
     local equippedCrowbar = hasTool("Crowbar")
     if not equippedCrowbar then return end
@@ -1879,10 +1832,10 @@ local function openSafe(safeModel)
     local startTime = tick()
     local brokenValue = safeModel.Values and safeModel.Values:FindFirstChild("Broken")
     
-    -- Запоминаем начальное состояние сейфа
+    -- Salvăm starea inițială
     local wasBroken = brokenValue and brokenValue.Value or false
     
-    -- Небольшой микро-шаг для начала процесса
+    -- Mic pas la început
     local char = localPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -1890,7 +1843,7 @@ local function openSafe(safeModel)
         task.wait(0.05)
     end
     
-    -- Пока сейф не сломан и прошло меньше 15 секунд
+    -- Loop spargere
     while safeModel and safeModel.Parent and brokenValue and not brokenValue.Value and (tick() - startTime < 15) do
         local char = localPlayer.Character
         if not char then break end
@@ -1911,20 +1864,45 @@ local function openSafe(safeModel)
         wait(0.2)
     end
     
-    -- Проверяем, был ли сейф сломан во время выполнения цикла
+    -- Verificăm dacă s-a spart
     local isNowBroken = brokenValue and brokenValue.Value or false
     
-    -- ЕСЛИ СЕЙФ БЫЛ СЛОМАН, ДЕЛАЕМ МИКРО-ШАГ
+    -- 🔥 AICI SE FACE MIȘCAREA CONSTANTĂ PE 4 SECUNDE (W A S D)
     if isNowBroken and not wasBroken then
         task.wait(0.3)
-        doMicroStep() -- Используем функцию микро-шага
+
+        local char = localPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if hrp then
+            local moveEndTime = tick() + 4  -- Mișcarea se va opri după 4 secunde
+
+            while tick() < moveEndTime do
+                local direction = math.random(1, 4)
+
+                if direction == 1 then
+                    -- W (înainte)
+                    hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * 0.4
+                elseif direction == 2 then
+                    -- S (înapoi)
+                    hrp.CFrame = hrp.CFrame - hrp.CFrame.LookVector * 0.3
+                elseif direction == 3 then
+                    -- A (stânga)
+                    hrp.CFrame = hrp.CFrame - hrp.CFrame.RightVector * 0.3
+                elseif direction == 4 then
+                    -- D (dreapta)
+                    hrp.CFrame = hrp.CFrame + hrp.CFrame.RightVector * 0.3
+                end
+
+                task.wait(0.15) -- mișcare constantă
+            end
+        end
     end
     
     wait(8)
 end
-
 -- =================================================================================
--- --- ФУНКЦИЯ ДЛЯ СЕРИИ МИКРО-ШАГОВ ПРИ ПОЛОМКЕ СЕЙФА ---
+-- --- Funcție pentru o serie de micro-pași la spargerea seifului ---
 -- =================================================================================
 
 local function onSafeBroken(safeModel)
@@ -1966,7 +1944,7 @@ local function onSafeBroken(safeModel)
 end
 
 -- =================================================================================
--- --- УЛУЧШЕННЫЙ ДЕТЕКШЕН ПОЛОМКИ СЕЙФОВ С ДОПОЛНИТЕЛЬНЫМИ ДВИЖЕНИЯМИ ---
+-- --- Detecție îmbunătățită a spargerii seifurilor cu mișcări suplimentare ---
 -- =================================================================================
 
 local function setupSafeBreakDetection()
@@ -2015,53 +1993,49 @@ local function setupSafeBreakDetection()
     end
 end
 
--- =================================================================================
--- --- ЗАПУСК ДЕТЕКШЕНА И ПЕРИОДИЧЕСКИХ МИКРО-ШАГОВ ---
--- =================================================================================
-
--- Запускаем детекшен каждые 2 секунды
+-- Pornim detecția la fiecare 2 secunde
 task.spawn(function()
     while task.wait(2) do
         if autofarmEnabled then
-            setupSafeBreakDetection()
+            setupSafeBreakDetection() -- verifică dacă trebuie oprită autofarma (siguranță)
         end
     end
 end)
 
--- Периодические микро-шаги каждые 1-3 секунды
+-- Micro-pași periodici la fiecare 1–3 secunde
 task.spawn(function()
     while true do
-        task.wait(1 + math.random() * 2) -- ждем от 1 до 3 секунд
+        task.wait(1 + math.random() * 2) -- așteaptă între 1 și 3 secunde
         
         if autofarmEnabled then
-            -- Делаем 2-4 микро-шага подряд
+            -- Facem 2–4 micro-pași consecutivi
             local stepCount = math.random(2, 4)
             for i = 1, stepCount do
-                doMicroStep()
-                task.wait(0.3 + math.random() * 0.5)
+                doMicroStep() -- execută un pas mic din autofarm
+                task.wait(0.3 + math.random() * 0.5) -- pauză între 0.3 și 0.8 secunde
             end
         end
     end
 end)
 
--- Дополнительный поток для случайных движений
+-- Task suplimentar pentru mișcări aleatorii
 task.spawn(function()
     while true do
-        task.wait(0.8 + math.random() * 1.5) -- ждем от 0.8 до 2.3 секунд
+        task.wait(0.8 + math.random() * 1.5) -- așteaptă între 0.8 și 2.3 secunde
         
-        if autofarmEnabled and math.random(1, 3) == 1 then -- 33% шанс
-            -- Делаем необычное движение (только вперед+поворот или только вправо+поворот)
+        if autofarmEnabled and math.random(1, 3) == 1 then -- 33% șansă
+            -- Facem o mișcare neobișnuită (înainte+rotire sau dreapta+rotire)
             local char = localPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             
             if hrp then
                 if math.random(1, 2) == 1 then
-                    -- Движение вперед с поворотом
+                    -- Mișcare înainte cu rotire
                     hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * 0.35
                     task.wait(0.15)
                     hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(math.random(-20, 20)), 0)
                 else
-                    -- Движение вправо с поворотом
+                    -- Mișcare spre dreapta cu rotire
                     hrp.CFrame = hrp.CFrame + hrp.CFrame.RightVector * 0.35
                     task.wait(0.15)
                     hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(math.random(-15, 15)), 0)
@@ -2072,7 +2046,7 @@ task.spawn(function()
 end)
 
 -- =================================================================================
--- --- ГЛАВНАЯ ЛОГИКА АВТОФАРМА ---
+-- --- Logica principală a autofarmei ---
 -- =================================================================================
 
 local noTargetCounter = 0
@@ -2437,67 +2411,43 @@ local function Aimbot_Disable()
     end
 end
 
---======================= INF STAMINA =========================--
+--========================== Infinite Stamina ========================--
+local InfStamina_Enabled = false
+local InfStamina_Connection = nil
 
-local UserInputService_stam = UserInputService
-local isInfiniteStaminaEnabled = false
-local oldStaminaFunction = nil
-local targetFunction = nil
-
-do
-    local success_hook, result_hook = pcall(function()
-        local env = nil
-        local success_env1, env1 = pcall(getrenv)
-        if success_env1 then env = env1 else local success_env2, env2 = pcall(getfenv); if success_env2 then env = env2 end end
-
-        if env and env._G and env._G.S_Take then
-             local success_upval, upval = pcall(getupvalue, env._G.S_Take, 2)
-             if success_upval and type(upval) == 'function' then
-                 targetFunction = upval
-             else
-                 warn("Inf Stamina: Cannot get upvalue 2")
-             end
-        else
-             warn("Inf Stamina: _G.S_Take not found")
-        end
-
-        if targetFunction then
-             local hookSuccess, hookResult = pcall(function()
-                 oldStaminaFunction = hookfunction(
-                     targetFunction,
-                     function(v1, ...)
-                         local args = {...}
-                         if isInfiniteStaminaEnabled then
-                             return oldStaminaFunction(0, unpack(args))
-                         else
-                             return oldStaminaFunction(v1, unpack(args))
-                         end
-                     end
-                 )
-             end)
-             if not hookSuccess then
-                  warn("Inf Stamina: hookfunction failed: ", hookResult)
-                  oldStaminaFunction = nil
-             end
+local function InfStamina_Enable()
+    if InfStamina_Enabled then return end
+    InfStamina_Enabled = true
+    
+    -- Folosim RunService (RS) care e deja definit sus în scriptul tău
+    InfStamina_Connection = RunService.RenderStepped:Connect(function()
+        if not InfStamina_Enabled then return end
+        
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        
+        if hum then
+            -- Setăm atributul doar dacă nu este deja setat, pentru eficiență
+            if hum:GetAttribute("ZSPRN_M") ~= true then
+                hum:SetAttribute("ZSPRN_M", true)
+            end
         end
     end)
-    if not success_hook then
-        warn("Inf Stamina: Error during hooking: ", result_hook)
+end
+
+local function InfStamina_Disable()
+    InfStamina_Enabled = false
+    if InfStamina_Connection then
+        InfStamina_Connection:Disconnect()
+        InfStamina_Connection = nil
+    end
+    
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum:SetAttribute("ZSPRN_M", nil)
     end
 end
-
-local function InfiniteStamina_Enable()
-    if not oldStaminaFunction then
-        warn("Inf Stamina: Stamina function not hooked.")
-        return
-    end
-    isInfiniteStaminaEnabled = true
-end
-
-local function InfiniteStamina_Disable()
-    isInfiniteStaminaEnabled = false
-end
-
 --======================= INVISIBILITY =========================--
 
 local Invis_Fixed = true
@@ -2852,52 +2802,73 @@ function NoRecoil_Disable()
 end
 
 --======================= WALLHACK (ESP) =========================--
+local ESP_Enabled = false
+local espConnection = nil
 
-local ESP_Enabled=false
-local ESP_Loading=false
-local LastToggleTime=0
-local DEBOUNCE_TIME=0.5
+local function updESP()
+    for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= game:GetService("Players").LocalPlayer then
+            local char = p.Character
+            if char then
+                local hl = char:FindFirstChild("MyESP")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local myRoot = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-function ESP_Enable()
-    if os.clock()-LastToggleTime<DEBOUNCE_TIME then return end; LastToggleTime=os.clock();
-    if ESP_Loading or ESP_Enabled then return end;
-    ESP_Loading=true;
-    local success, err=pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/kskdkdkdmsmdmdm0-dot/lolsjkskf/refs/heads/main/walhaczek", true))();
-        ESP_Enabled=true;
-        ESP_Loading=false
-    end);
-    if not success then
-        warn("ESP loading error: "..tostring(err));
-        ESP_Loading=false;
-        ESP_Enabled=false;
+                if ESP_Enabled and root and myRoot then
+                    local distance = (root.Position - myRoot.Position).Magnitude
+                    
+                    -- Verificăm distanța de 1000 studs
+                    if distance <= 1000 then
+                        if not hl then
+                            hl = Instance.new("Highlight")
+                            hl.Name = "MyESP"
+                            hl.Parent = char
+                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        end
+                        
+                        -- SETĂRI PENTRU ASPECT MOV (Ca în meniu):
+                        hl.FillTransparency = 1 -- Interior transparent
+                        hl.OutlineTransparency = 0 -- Margine vizibilă
+                        hl.OutlineColor = Color3.fromRGB(115, 90, 250) -- MOVUL TĂU
+                        hl.Enabled = true
+                    else
+                        -- Dacă e prea departe, scoatem Highlight-ul
+                        if hl then hl:Destroy() end
+                    end
+                else
+                    -- Dacă ESP e oprit sau inamicul e invalid, scoatem Highlight-ul
+                    if hl then hl:Destroy() end
+                end
+            end
+        end
     end
 end
 
-function ESP_Disable()
-    if os.clock()-LastToggleTime<DEBOUNCE_TIME then return end; LastToggleTime=os.clock();
-    if not ESP_Enabled then return end;
-    ESP_Enabled=false;
-    local coreGui=game:GetService("CoreGui");
-    for _, name in pairs({"Folder","ESP_Holder","ESP_Folder","ESP"}) do
-        local folder=coreGui:FindFirstChild(name);
-        if folder then folder:Destroy() end
+-- Funcțiile pentru butoanele de meniu
+local function ESP_Enable()
+    ESP_Enabled = true
+    if not espConnection then
+        -- Folosim Heartbeat pentru o actualizare fluidă (fără lag)
+        espConnection = game:GetService("RunService").Heartbeat:Connect(updESP)
     end
 end
 
---======================= ANTI-AFK =========================--
-
-local AntiAFK_Enabled = true
-local AntiAFK_Bind = nil
-local function AntiAFK_Enable()
-    AntiAFK_Enabled = true
+local function ESP_Disable()
+    ESP_Enabled = false
+    if espConnection then
+        espConnection:Disconnect()
+        espConnection = nil
+    end
+    -- Curățăm imediat tot movul de pe jucători
+    for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+        if p.Character then
+            local hl = p.Character:FindFirstChild("MyESP")
+            if hl then hl:Destroy() end
+        end
+    end
 end
-local function AntiAFK_Disable()
-    AntiAFK_Enabled = false
-end
-
 -------------------------------------------------------------------------------
---  5. Функция создания строки кнопки
+--  5. Funcție care creează un rând de butoane
 -------------------------------------------------------------------------------
 
 local buttonHoverColor = Color3.fromRGB(40, 40, 50)
@@ -3172,10 +3143,11 @@ local function createActionButtonFrame(labelText, buttonText, actionFunction)
     return frame
 end
 
+
 local EQR_UI = {}
 
 -------------------------------------------------------------------------------
--- 1. СВОЙСТВА UI
+-- 1. Proprietăți UI
 -------------------------------------------------------------------------------
 
 EQR_UI.Categories = { "Combat", "Movement", "Visuals", "Farming", "Misc", "Rage" }
@@ -3207,7 +3179,7 @@ EQR_UI.KeyBinds = {
 }
 
 -------------------------------------------------------------------------------
--- 2. МЕТОДЫ UI
+-- 2. METODE UI
 -------------------------------------------------------------------------------
 
 function EQR_UI:SwitchCategory(categoryName)
@@ -3333,6 +3305,11 @@ function EQR_UI:Initialize()
         local catCorner = Instance.new("UICorner")
         catCorner.CornerRadius = UDim.new(0, 6)
         catCorner.Parent = catButton
+local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.5
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Color = Color3.fromRGB(60, 60, 65)
+        stroke.Parent = catButton
 
         local catLabel = Instance.new("TextLabel")
         catLabel.Name = "TextLabel"
@@ -3355,6 +3332,14 @@ function EQR_UI:Initialize()
             end
         end)
         catButton.MouseButton1Click:Connect(function()
+            -- Facem toate celelalte butoane gri înapoi
+            for _, btn in pairs(self.CategoryButtons) do
+                if btn:FindFirstChild("UIStroke") then
+                    btn.UIStroke.Color = Color3.fromRGB(60, 60, 65)
+                end
+            end
+            -- Facem butonul pe care ai apăsat MOV
+            stroke.Color = Color3.fromRGB(115, 90, 250)
             self:SwitchCategory(categoryName)
         end)
 
@@ -3371,10 +3356,10 @@ function EQR_UI:Initialize()
     -- Movement
     table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Fly", true, function() return Fly_Enabled end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
     table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Noclip", true, function() return Noclip_Enabled end, Noclip_Enable, Noclip_Disable, function() return k.noclip end, function(val) k.noclip=val; Noclip_Bind=val end))
-    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Infinite Stamina", true, function() return isInfiniteStaminaEnabled end, InfiniteStamina_Enable, InfiniteStamina_Disable, function() return k.infiniteStamina end, function(val) k.infiniteStamina=val end))
+    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Infinite Stamina", true, function() return InfStamina_Enabled end, InfStamina_Enable, InfStamina_Disable, function() return k.infiniteStamina end, function(val) k.infiniteStamina = val end))
 
     -- Visuals
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("ESP (55 STUDS)", true, function() return ESP_Enabled end, ESP_Enable, ESP_Disable, function() return k.esp end, function(val) k.esp=val end))
+    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("ESP", true, function() return ESP_Enabled end, ESP_Enable, ESP_Disable, function() return k.esp end, function(val) k.esp = val end))
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("Invisibility", true, _G.IsInvisEnabled, _G.Invis_Enable, _G.Invis_Disable, function() return k.invis end, function(val) k.invis=val end))
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("Safe ESP", true, function() return BredMakurz_Enabled end, BredMakurz_Enable, BredMakurz_Disable, function() return k.safeESP end, function(val) k.safeESP=val end))
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("FullBright", true, function() return FullBright_Enabled end, FullBright_Enable, FullBright_Disable, function() return k.FullBright end, function(val) k.FullBright=val; FullBright_Bind=val end))
