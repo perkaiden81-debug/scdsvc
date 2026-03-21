@@ -145,6 +145,25 @@ contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
 contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 contentLayout.Parent = contentFrame
 
+contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 120)
+end)
+
+
+local subTabContainer = Instance.new("Frame")
+subTabContainer.Name = "SubTabContainer"
+subTabContainer.Size = UDim2.new(1, -150, 0, 30)
+subTabContainer.Position = UDim2.new(0, 140, 0, 45)
+subTabContainer.BackgroundTransparency = 1
+subTabContainer.Visible = false
+subTabContainer.Parent = mainFrame
+local subTabLayout = Instance.new("UIListLayout")
+subTabLayout.FillDirection = Enum.FillDirection.Horizontal
+subTabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+subTabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+subTabLayout.Padding = UDim.new(0, 5)
+subTabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+subTabLayout.Parent = subTabContainer
 
 -------------------------------------------------------------------------------
 --  2. tragerea ferestrei
@@ -611,55 +630,85 @@ end
 
 --============================ Fly ============================--
 
-local Fly_Enabled = false
-local Fly_Bind = nil
-local Fly_Connection
-local Fly_Speed = 50
+local FlySettings = { On = false, Method = "Ragdoll" }
+local flySpd = 60
+local RUNS = { Rag = nil, Old = nil }
+local hrp = nil
+local evFolderFly = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+local flyEv = evFolderFly and evFolderFly:FindFirstChild("RZDONL")
+local ragEv = evFolderFly and evFolderFly:FindFirstChild("__RZDONL")
 
-local function Fly_Enable()
-    if Fly_Enabled then return end
-    Fly_Enabled = true
+local function stopRagLoop() if RUNS.Rag then RUNS.Rag:Disconnect(); RUNS.Rag = nil end end
+local function stopOldFly() if RUNS.Old then RUNS.Old:Disconnect(); RUNS.Old = nil end end
+local function stopAllFly() stopRagLoop(); stopOldFly(); if hrp then hrp.Velocity = Vector3.new(0,0,0) end end
 
-    Fly_Connection = RunService.RenderStepped:Connect(function(dt)
-        if not Fly_Enabled then return end
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local cam = workspace.CurrentCamera
-            local moveDir = Vector3.new()
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDir = moveDir + cam.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDir = moveDir - cam.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDir = moveDir - cam.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDir = moveDir + cam.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDir = moveDir + Vector3.new(0,1,0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveDir = moveDir - Vector3.new(0,1,0)
-            end
+local function startRagLoop()
+    if not ragEv or not hrp then return end
+    stopRagLoop()
+    RUNS.Rag = game:GetService("RunService").RenderStepped:Connect(function()
+        if not hrp or not FlySettings.On or FlySettings.Method ~= "Ragdoll" then stopAllFly(); return end
+        ragEv:FireServer("__---r", Vector3.new(0,0,0), hrp.CFrame, false)
+    end)
+end
 
-            if moveDir.Magnitude > 0 then
-                hrp.CFrame = hrp.CFrame + (moveDir.Unit * Fly_Speed * dt)
-            end
+local function enRagFly()
+    local me = game.Players.LocalPlayer
+    local c = me.Character or me.CharacterAdded:Wait()
+    hrp = c:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    stopAllFly(); startRagLoop()
+    RUNS.Old = game:GetService("RunService").RenderStepped:Connect(function()
+        if not hrp or not FlySettings.On or FlySettings.Method ~= "Ragdoll" then stopAllFly(); return end
+        local cam = workspace.CurrentCamera; local mv = Vector3.new(0,0,0)
+        local UIS = game:GetService("UserInputService")
+        if UIS:IsKeyDown(Enum.KeyCode.W) then mv = mv + cam.CFrame.LookVector * flySpd end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then mv = mv - cam.CFrame.LookVector * flySpd end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then mv = mv - cam.CFrame.RightVector * flySpd end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then mv = mv + cam.CFrame.RightVector * flySpd end
+        hrp.Velocity = mv
+        if flyEv then flyEv:FireServer("---r", Vector3.new(0,0,0), hrp.CFrame, false) end
+    end)
+end
+
+local function enOldFly()
+    local me = game.Players.LocalPlayer
+    stopAllFly()
+    RUNS.Old = game:GetService("RunService").RenderStepped:Connect(function()
+        if not FlySettings.On or FlySettings.Method ~= "Old" then stopAllFly(); return end
+        local p = me; local c = p.Character or p.CharacterAdded:Wait(); local rp = c:FindFirstChild("HumanoidRootPart")
+        if rp then
+            local cam = workspace.CurrentCamera; local md = Vector3.zero
+            local UIS = game:GetService("UserInputService")
+            if UIS:IsKeyDown(Enum.KeyCode.W) then md = md + cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then md = md - cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then md = md - cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then md = md + cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then md = md + Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then md = md - Vector3.new(0,1,0) end
+            rp.CFrame = rp.CFrame + (md * 50 * game:GetService("RunService").RenderStepped:Wait())
         end
     end)
 end
 
+local function applyFly()
+    stopAllFly(); if not FlySettings.On then return end
+    if FlySettings.Method == "Ragdoll" then enRagFly() else enOldFly() end
+end
+
+game.Players.LocalPlayer.CharacterAdded:Connect(function(c)
+    if not FlySettings.On then return end; task.wait(0.5); c:WaitForChild("HumanoidRootPart"); task.wait(0.1)
+    if FlySettings.On then applyFly() end
+end)
+
+local function Fly_Enable()
+    if FlySettings.On then return end
+    FlySettings.On = true
+    if game.Players.LocalPlayer.Character then applyFly() end
+end
+
 local function Fly_Disable()
-    if not Fly_Enabled then return end
-    Fly_Enabled = false
-    if Fly_Connection then
-        Fly_Connection:Disconnect()
-        Fly_Connection = nil
-    end
+    if not FlySettings.On then return end
+    FlySettings.On = false
+    stopAllFly()
 end
 
 --============================ FullBright ============================--
@@ -2188,227 +2237,392 @@ _G.Noclip_Disable = Noclip_Disable
 _G.IsNoclipActive = function() return Noclip_Enabled end
 
 --======================= AIMBOT =========================--
+if not getgenv().AimBotSettings then
+    getgenv().AimBotSettings = {
+        Enabled = false,
+        ShowFOV = false,
+        FOV = 100,
+        Smoothing = 0.05,
+        AimPart = "Head",
+        
+        WallCheck = false,
+        DownedCheck = false
+    }
+end
 
-local players_aim = Players
-local localPlayer_aim = LocalPlayer
-local CurrentCamera_aim = workspace.CurrentCamera
-local TweenService_aim = TweenService
-local UserInputService_aim = UserInputService
-local mouseLocation_aim = UserInputService_aim.GetMouseLocation
-local RunService_aim = RunService
+-- 2. CREARE CERC FOV (Ca să nu dea eroare în buclă)
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 0.5
+FOVCircle.Color = Color3.fromRGB(130, 90, 255)
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
+FOVCircle.Visible = false
 
-local AimBotSettings = {
-    Enabled = false; TeamCheck = false; WallCheck = true; StickyAim = false;
-    UseMouse = true; MouseBind = "MouseButton2"; Keybind = nil;
-    ShowFov = false; Fov = 100;
-    Smoothing = 0.02; AimPart = "HumanoidRootPart";
-    IsAimKeyDown = false; Target = nil; CameraTween = nil;
+-- 3. FUNCȚIA DE SCANARE (Găsește inamicul)
+local function GetClosestTarget()
+    local target = nil
+    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+    local cam = workspace.CurrentCamera
+    local lp = game.Players.LocalPlayer
+    local char = lp.Character
+    
+    local maxLimit = AimBotSettings.FOV or 100
+    local bestScore = math.huge 
+
+    local R6Parts = {"Head", "Torso", "HumanoidRootPart", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p ~= lp and p.Character and p.Character:FindFirstChild("Humanoid") and char and char:FindFirstChild("HumanoidRootPart") then
+            if p.Character.Humanoid.Health > 0 then
+                
+                -- Calculăm distanța reală (Studs)
+                local distInStuds = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                
+                -- Limită maximă de 600 studs (peste asta e greu să mai nimerești oricum)
+                if distInStuds > 600 then continue end
+
+                for _, partName in pairs(R6Parts) do
+                    local part = p.Character:FindFirstChild(partName)
+                    
+                    if part and part:IsA("BasePart") then
+                        local pos, onScreen = cam:WorldToViewportPoint(part.Position)
+                        
+                        if onScreen then
+                            local screenPos = Vector2.new(pos.X, pos.Y)
+                            local distFromMouse = (screenPos - mousePos).Magnitude
+                            
+                            -- DACĂ pixelul este în interiorul cercului FOV
+                            if distFromMouse <= maxLimit then
+                                
+                                -- FORMULA DE PRIORITATE (Aici e magia):
+                                -- Adăugăm o "penalizare" pentru distanță.
+                                -- Cine e aproape are scor mic (bun), cine e departe are scor mare (rău).
+                                local score = distFromMouse + (distInStuds * 2) 
+
+                                if score < bestScore then
+                                    bestScore = score
+                                    target = p
+                                end
+                                break 
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+--======================= NO RECOIL =========================--
+
+local NRSettings = {
+    Enabled = false,
+    WeaponCache = {},
+    OriginalValues = {},
+    Connections = {},
+    GunMods = { NoRecoil = true, Spread = true, SpreadAmount = 0 }
 }
 
-local function IsAlive_aim(Player)
-    return Player and Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") and Player.Character.Humanoid.Health > 0
+function cacheWeapons_NR()
+    NRSettings.WeaponCache = {}
+    for _, v in pairs(getgc(true)) do
+        if type(v) == 'table' and rawget(v, 'EquipTime') then
+            table.insert(NRSettings.WeaponCache, v)
+            if not NRSettings.OriginalValues[v] then
+                NRSettings.OriginalValues[v] = {
+                    Recoil = v.Recoil,
+                    CameraRecoilingEnabled = v.CameraRecoilingEnabled,
+                    AngleX_Min = v.AngleX_Min,
+                    AngleX_Max = v.AngleX_Max,
+                    AngleY_Min = v.AngleY_Min,
+                    AngleY_Max = v.AngleY_Max,
+                    AngleZ_Min = v.AngleZ_Min,
+                    AngleZ_Max = v.AngleZ_Max,
+                    Spread = v.Spread
+                }
+            end
+        end
+    end
 end
 
-local function GetTeam_aim(Player)
-    if not localPlayer_aim.Neutral and Player and Player.Team and game:GetService("Teams"):FindFirstChild(Player.Team.Name) then
-        return game:GetService("Teams")[Player.Team.Name];
+function applyGunMods_NR()
+    for _, weapon in ipairs(NRSettings.WeaponCache) do
+        if NRSettings.GunMods.NoRecoil then
+            weapon.Recoil = 0
+            weapon.CameraRecoilingEnabled = false
+            weapon.AngleX_Min = 0
+            weapon.AngleX_Max = 0
+            weapon.AngleY_Min = 0
+            weapon.AngleY_Max = 0
+            weapon.AngleZ_Min = 0
+            weapon.AngleZ_Max = 0
+        end
+        if NRSettings.GunMods.Spread then
+            weapon.Spread = NRSettings.GunMods.SpreadAmount
+        end
     end
-    return nil;
 end
 
-local function isVisible_aim(targetPosition, character)
-    if not AimBotSettings.WallCheck then return true end
-
-    local ignoreList = {CurrentCamera_aim}
-    if localPlayer_aim.Character then
-         table.insert(ignoreList, localPlayer_aim.Character)
+function resetGunMods_NR()
+    for weapon, values in pairs(NRSettings.OriginalValues) do
+        if weapon then
+            pcall(function()
+                weapon.Recoil = values.Recoil
+                weapon.CameraRecoilingEnabled = values.CameraRecoilingEnabled
+                weapon.AngleX_Min = values.AngleX_Min
+                weapon.AngleX_Max = values.AngleX_Max
+                weapon.AngleY_Min = values.AngleY_Min
+                weapon.AngleY_Max = values.AngleY_Max
+                weapon.AngleZ_Min = values.AngleZ_Min
+                weapon.AngleZ_Max = values.AngleZ_Max
+                weapon.Spread = values.Spread
+            end)
+        end
     end
-    if character and character:FindFirstChild("Head") and character.Head.Parent then
-        table.insert(ignoreList, character.Head.Parent)
-    end
+end
 
-    local success, obscured = pcall(function()
-        return CurrentCamera_aim:GetPartsObscuringTarget({targetPosition}, ignoreList)
+function handleWeapon_NR(weapon)
+    if NRSettings.Enabled then
+        task.wait(0.1)
+        cacheWeapons_NR()
+        applyGunMods_NR()
+    end
+end
+
+function onCharacterAdded_NR(character)
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Tool") then
+            handleWeapon_NR(child)
+        end
+    end
+    
+    local childConn = character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            handleWeapon_NR(child)
+        end
     end)
-
-    if not success or obscured == nil then return false end
-    return #obscured == 0;
+    table.insert(NRSettings.Connections, childConn)
+    
+    local humanoid = character:WaitForChild("Humanoid", 2)
+    if humanoid then
+        local diedConn = humanoid.Died:Connect(function()
+            if NRSettings.Enabled then
+                task.wait(1.5)
+                cacheWeapons_NR()
+                applyGunMods_NR()
+            end
+        end)
+        table.insert(NRSettings.Connections, diedConn)
+    end
 end
 
-local function CameraGetClosestToMouse_aim()
-    local AimFov = AimBotSettings.Fov;
-    local targetPlayer = nil;
+function enableNoRecoil()
+    if NRSettings.Enabled then return end
+    NRSettings.Enabled = true
+    NRSettings.WeaponCache = {}
+    NRSettings.OriginalValues = {}
+    
+    cacheWeapons_NR()
+    applyGunMods_NR()
+    
+    local charConn = game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded_NR)
+    table.insert(NRSettings.Connections, charConn)
+    
+    if game.Players.LocalPlayer.Character then
+        onCharacterAdded_NR(game.Players.LocalPlayer.Character)
+    end
+end
 
-    for i, v in pairs(players_aim:GetPlayers()) do
-        if v ~= localPlayer_aim then
-            if AimBotSettings.TeamCheck ~= true or GetTeam_aim(v) ~= GetTeam_aim(localPlayer_aim) then
-                if IsAlive_aim(v) then
-                    local char = v.Character
-                    local aimPartInstance = char and char:FindFirstChild(AimBotSettings.AimPart)
-                    if aimPartInstance then
-                        local aimPartPosition = aimPartInstance.Position
-                        local successWTV, screen_pos, on_screen = pcall(function() return CurrentCamera_aim:WorldToViewportPoint(aimPartPosition) end)
-                        if successWTV and on_screen then
-                             local screen_pos_2D = Vector2.new(screen_pos.X, screen_pos.Y)
-                             local successMouseLoc, mousePos = pcall(mouseLocation_aim, UserInputService_aim)
-                             if not successMouseLoc then mousePos = Vector2.new() end
-                             local new_magnitude = (screen_pos_2D - mousePos).Magnitude
-                             if new_magnitude < AimFov and isVisible_aim(aimPartPosition, char) then
-                                AimFov = new_magnitude;
-                                targetPlayer = v;
-                             end
-                        end
+function disableNoRecoil()
+    if not NRSettings.Enabled then return end
+    NRSettings.Enabled = false
+    
+    resetGunMods_NR()
+    
+    for _, conn in ipairs(NRSettings.Connections) do
+        conn:Disconnect()
+    end
+    NRSettings.Connections = {}
+end
+
+--======================= SILENT AIM =========================--
+local SA = {
+    On = false, DrawCircle = false, DrawSize = 100, ChkDowned = true, ChkTeam = false, VisChk = false,
+    MaxDist = 500, AutoWall = true, HitChance = 80, UseFOV = true, Debug = false,
+    FOVCol = Color3.fromRGB(130, 90, 255), TMode = "Random",
+    HeadChance = 80, BodyChance = 20,
+    Parts = {
+        ["Head"]={"Head"},
+        ["Torso"]={"UpperTorso","LowerTorso","HumanoidRootPart"},
+        ["Random"]={"Head","UpperTorso","LowerTorso"}
+    }
+}
+
+local SACircle = nil
+function crFOVCircle()
+    if SACircle then SACircle:Remove(); SACircle = nil end
+    if SA.DrawCircle and Drawing then
+        SACircle = Drawing.new("Circle"); SACircle.Color = SA.FOVCol; SACircle.Filled = false
+        SACircle.Thickness = 0.5; SACircle.Radius = SA.DrawSize; SACircle.Visible = true; SACircle.Transparency = 1
+    end
+end
+
+function getValidT()
+    if not SA.On then return nil end
+    local Cam = workspace.CurrentCamera
+    local t = nil; local minD = math.huge; local centerPos = game:GetService("UserInputService"):GetMouseLocation()
+    local LP = game.Players.LocalPlayer
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p == LP then continue end; if not p.Character then continue end
+        if SA.ChkTeam and p.Team == LP.Team then continue end
+        local c = p.Character; local h = c:FindFirstChildOfClass("Humanoid")
+        if not h or h.Health <= 0 then continue end
+        if SA.ChkDowned and c:FindFirstChild("Downed") and c.Downed.Value then continue end
+
+        local validP = SA.Parts[SA.TMode]; if not validP then validP = {"Head"} end
+        local avail = {}; for _, pn in ipairs(validP) do local pt = c:FindFirstChild(pn); if pt then table.insert(avail, {Part=pt, Name=pn}) end end
+        if #avail == 0 then continue end
+        local sel = nil
+
+        if SA.TMode == "Head" then 
+            sel = avail[1]
+        elseif SA.TMode == "Torso" then 
+            sel = avail[math.random(1,#avail)]
+        elseif SA.TMode == "Random" then 
+            local rand = math.random(1, 100)
+            if rand <= SA.HeadChance then sel = {Part = c:FindFirstChild("Head"), Name = "Head"}
+            else sel = {Part = c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("UpperTorso") or c:FindFirstChild("Torso"), Name = "Torso"} end
+        else 
+            sel = avail[1] 
+        end
+        if not sel or not sel.Part then continue end
+        local tp = sel.Part; local pPos = tp.Position
+        local myC = LP.Character; local myR = myC and myC:FindFirstChild("HumanoidRootPart")
+        if myR then local d = (myR.Position - pPos).Magnitude; if d > SA.MaxDist then continue end end
+        
+        -- WALL CHECK (Prevenim Hitmarkere False prin pereți)
+        local ray = Ray.new(Cam.CFrame.Position, (pPos - Cam.CFrame.Position).Unit * 1000)
+        local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character, Cam})
+        if hit and not hit:IsDescendantOf(c) and hit.Transparency < 1 then continue end
+        local sPos, onSc = Cam:WorldToViewportPoint(pPos); if not onSc then continue end
+        if SA.UseFOV then
+            local closestLimbDist = math.huge
+            for _, limb in pairs(c:GetChildren()) do
+                if limb:IsA("BasePart") then
+                    local lsP, lsOnSc = Cam:WorldToViewportPoint(limb.Position)
+                    if lsOnSc then
+                        local ld2m = (centerPos - Vector2.new(lsP.X, lsP.Y)).Magnitude
+                        if ld2m < closestLimbDist then closestLimbDist = ld2m end
                     end
                 end
             end
+            
+            -- Ofera o marja de "pixeli" (35) pentru a aproxima vizual membrele de la margine
+            if closestLimbDist > SA.DrawSize + 35 then continue end
+            if closestLimbDist < minD then minD = closestLimbDist; t = {Player=p, Char=c, Part=tp, PName=sel.Name, Pos=pPos, Dist=closestLimbDist, ScPos=sPos, WDist=(myR and (myR.Position-pPos).Magnitude) or 0} end
+        else
+            if myR then local wd = (myR.Position - pPos).Magnitude; if wd < minD then minD = wd; t = {Player=p, Char=c, Part=tp, PName=sel.Name, Pos=pPos, Dist=0, ScPos=sPos, WDist=wd} end end
         end
     end
-    return targetPlayer;
+    -- HitChance is applied per-tick when acquiring targets based on user's hub code.
+    if t then local ch = math.random(1,100); if ch > SA.HitChance then return nil end end
+    return t
 end
 
-UserInputService_aim.InputBegan:Connect(function(input, gameProcessedEvent)
-    if not AimBotSettings then return end
-    if gameProcessedEvent or not AimBotSettings.Enabled then return end
+function canFire(t) if not t then return false end; if SA.UseFOV and t.Dist > SA.DrawSize + 35 then return false end; return true end
 
-    if not AimBotSettings.UseMouse and AimBotSettings.Keybind and input.KeyCode == AimBotSettings.Keybind then
-        AimBotSettings.Target = CameraGetClosestToMouse_aim();
-        AimBotSettings.IsAimKeyDown = true;
-    elseif AimBotSettings.UseMouse then
-        local bind = ""
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            bind = "MouseButton1"
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            bind = "MouseButton2"
-        end
-
-        if bind == AimBotSettings.MouseBind then
-            AimBotSettings.Target = CameraGetClosestToMouse_aim();
-            AimBotSettings.IsAimKeyDown = true;
-        end
+local SALoopConn = nil
+function updFOVCircle()
+    local Cam = workspace.CurrentCamera
+    if SACircle and SA.DrawCircle then
+        SACircle.Position = game:GetService("UserInputService"):GetMouseLocation()
+        SACircle.Radius = SA.DrawSize; SACircle.Visible = SA.On; SACircle.Color = SA.FOVCol
     end
-end)
+end
 
-UserInputService_aim.InputEnded:Connect(function(input, gameProcessedEvent)
-    if not AimBotSettings then return end
-    if gameProcessedEvent or not AimBotSettings.Enabled then return end
+function startSALoop()
+    if SALoopConn then SALoopConn:Disconnect() end
+    SALoopConn = game:GetService("RunService").Heartbeat:Connect(function() updFOVCircle(); _G.CurSATarget = getValidT() end)
+end
 
-    if not AimBotSettings.UseMouse and AimBotSettings.Keybind and input.KeyCode == AimBotSettings.Keybind then
-        AimBotSettings.IsAimKeyDown = false;
-        AimBotSettings.Target = nil;
-        if AimBotSettings.CameraTween then
-            AimBotSettings.CameraTween:Cancel();
-            AimBotSettings.CameraTween = nil;
-        end
-    elseif AimBotSettings.UseMouse then
-        local bind = ""
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            bind = "MouseButton1"
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            bind = "MouseButton2"
-        end
+local SAConns = {}; local lastT = nil; local lastDmg = false
+local ev2_bindable = game:GetService("ReplicatedStorage"):FindFirstChild("Events2")
+local GNX_remote = game:GetService("ReplicatedStorage"):FindFirstChild("Events") and game:GetService("ReplicatedStorage").Events:FindFirstChild("GNX_S")
+local ZFK_remote = game:GetService("ReplicatedStorage"):FindFirstChild("Events") and game:GetService("ReplicatedStorage").Events:FindFirstChild("ZFKLF__H")
 
-        if bind == AimBotSettings.MouseBind then
-            AimBotSettings.IsAimKeyDown = false;
-            AimBotSettings.Target = nil;
-            if AimBotSettings.CameraTween then
-                AimBotSettings.CameraTween:Cancel();
-                AimBotSettings.CameraTween = nil;
-            end
-        end
-    end
-end)
-
-RunService_aim.Heartbeat:Connect(function(deltaTime)
-    if AimBotSettings and AimBotSettings.Enabled then
-        if AimBotSettings.IsAimKeyDown then
-            local currentTarget = AimBotSettings.Target
-
-            if AimBotSettings.StickyAim then
-                 if currentTarget ~= nil and IsAlive_aim(currentTarget) then
-                    local targetChar = currentTarget.Character
-                    local aimPart = targetChar and targetChar:FindFirstChild(AimBotSettings.AimPart)
-                    if aimPart then
-                        if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil; end
-                        local networkPing = 0
-                        local successPing, resultPing = pcall(function() return localPlayer_aim:GetNetworkPing() end)
-                        if successPing then networkPing = resultPing end
-                        local predictionOffset = aimPart.Velocity and aimPart.Velocity * (networkPing * 0.1) or Vector3.new()
-                        local targetCFrame = CFrame.new(CurrentCamera_aim.CFrame.Position, aimPart.Position + predictionOffset)
-
-                        local successTween, tweenResult = pcall(function()
-                            AimBotSettings.CameraTween = TweenService_aim:Create(CurrentCamera_aim, TweenInfo.new(AimBotSettings.Smoothing, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = targetCFrame});
-                            AimBotSettings.CameraTween:Play();
-                        end)
-                        if not successTween then warn("Aimbot Tween creation failed:", tweenResult) end
-
-                    else
-                        AimBotSettings.Target = nil
-                        if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil; end
-                    end
-                 else
-                    local newTarget = CameraGetClosestToMouse_aim()
-                    AimBotSettings.Target = newTarget
-                    currentTarget = newTarget
-
-                    if currentTarget and IsAlive_aim(currentTarget) then
-                        local targetChar = currentTarget.Character
-                        local aimPart = targetChar and targetChar:FindFirstChild(AimBotSettings.AimPart)
-                        if aimPart then
-                            if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil; end
-                             local networkPing = 0; local sP, rP=pcall(function() return localPlayer_aim:GetNetworkPing() end); if sP then networkPing=rP end
-                             local predictionOffset = aimPart.Velocity and aimPart.Velocity * (networkPing * 0.1) or Vector3.new()
-                             local targetCFrame = CFrame.new(CurrentCamera_aim.CFrame.Position, aimPart.Position + predictionOffset)
-
-                             local sT, tR = pcall(function()
-                                AimBotSettings.CameraTween = TweenService_aim:Create(CurrentCamera_aim, TweenInfo.new(AimBotSettings.Smoothing, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = targetCFrame});
-                                AimBotSettings.CameraTween:Play();
-                             end)
-                             if not sT then warn("Aimbot Tween creation failed (new target):", tR) end
-                        end
-                    elseif AimBotSettings.CameraTween then
-                         AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil;
-                    end
-                 end
-
-            else
-                local target = CameraGetClosestToMouse_aim();
-                if target ~= nil and IsAlive_aim(target) then
-                    local targetChar = target.Character
-                    local aimPart = targetChar and targetChar:FindFirstChild(AimBotSettings.AimPart)
-                    if aimPart then
-                        if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil; end
-                        local networkPing = 0; local sP, rP=pcall(function() return localPlayer_aim:GetNetworkPing() end); if sP then networkPing=rP end
-                        local predictionOffset = aimPart.Velocity and aimPart.Velocity * (networkPing * 0.1) or Vector3.new()
-                        local targetCFrame = CFrame.new(CurrentCamera_aim.CFrame.Position, aimPart.Position + predictionOffset)
-
-                        local sT, tR = pcall(function()
-                            AimBotSettings.CameraTween = TweenService_aim:Create(CurrentCamera_aim, TweenInfo.new(AimBotSettings.Smoothing, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = targetCFrame});
-                            AimBotSettings.CameraTween:Play();
-                        end)
-                         if not sT then warn("Aimbot Tween creation failed (non-sticky):", tR) end
-
-                    else
-                         if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween = nil; end
-                    end
-                elseif AimBotSettings.CameraTween ~= nil then
-                    AimBotSettings.CameraTween:Cancel();
-                    AimBotSettings.CameraTween = nil;
+function hookShoot()
+    for _, c in pairs(SAConns) do if c then c:Disconnect() end end; SAConns = {}
+    local LP = game.Players.LocalPlayer
+    
+    if ev2_bindable and ZFK_remote then
+        local viz = ev2_bindable:FindFirstChild("Visualize")
+        if viz then
+            local c = viz.Event:Connect(function(_, sc, _, gun, _, sPos, bps)
+                if not SA.On then return end
+                local t = getValidT(); if not t or not canFire(t) then lastT = nil; lastDmg = false; return end
+                lastT = t; local c = LP.Character; if not c then return end
+                local myG = c:FindFirstChildOfClass("Tool"); if not myG or myG ~= gun then return end
+                local h = t.Char:FindFirstChildOfClass("Humanoid"); if not h or h.Health <= 0 then return end
+                local tp = t.Part; local pPos = tp.Position
+                local rOff = Vector3.new((math.random()-0.5)*0.5,(math.random()-0.5)*0.5,(math.random()-0.5)*0.5)
+                local hitPos = pPos + rOff
+                local newB = {}; for i=1,#bps do
+                    local dir = (hitPos - sPos).Unit; local spAmt = (100 - SA.HitChance)/500
+                    local sp = Vector3.new((math.random()-0.5)*spAmt,(math.random()-0.5)*spAmt,(math.random()-0.5)*spAmt)
+                    table.insert(newB, dir+sp)
                 end
-            end
+                lastDmg = true
+                task.spawn(function()
+                    for i=1,#newB do task.wait(0.01); pcall(function() ZFK_remote:FireServer("🧈", gun, sc, i, tp, hitPos, newB[i]) end) end
+                end)
+                if gun:FindFirstChild("Hitmarker") and lastDmg then gun.Hitmarker:Fire(tp) end
+                if lastDmg then return _, sc, _, gun, _, sPos, newB end
+                return _, sc, _, gun, _, sPos, bps
+            end)
+            table.insert(SAConns, c)
         end
     end
-end)
-
-local function Aimbot_Enable()
-    if AimBotSettings then AimBotSettings.Enabled=true else warn("Cannot enable Aimbot: AimBotSettings is nil") end
-end
-local function Aimbot_Disable()
-    if AimBotSettings then
-        AimBotSettings.Enabled=false; AimBotSettings.IsAimKeyDown=false; AimBotSettings.Target=nil;
-        if AimBotSettings.CameraTween then AimBotSettings.CameraTween:Cancel(); AimBotSettings.CameraTween=nil end
-    else
-         warn("Cannot disable Aimbot: AimBotSettings is nil")
+    if GNX_remote and ZFK_remote then
+        local c = GNX_remote.OnClientEvent:Connect(function(st, sc, gun, ft, sPos, dirs, silenced)
+            if not SA.On then return end
+            local t = getValidT(); if not t or not canFire(t) then lastT = nil; lastDmg = false; return end
+            lastT = t; local c = LP.Character; if not c then return end
+            local myG = c:FindFirstChildOfClass("Tool"); if not myG or myG ~= gun then return end
+            local h = t.Char:FindFirstChildOfClass("Humanoid"); if not h or h.Health <= 0 then return end
+            local tp = t.Part; local pPos = tp.Position
+            local rOff = Vector3.new((math.random()-0.5)*0.5,(math.random()-0.5)*0.5,(math.random()-0.5)*0.5)
+            local hitPos = pPos + rOff
+            local newD = {}; for i=1,#dirs do
+                local dir = (hitPos - sPos).Unit; local spAmt = (100 - SA.HitChance)/400
+                local sp = Vector3.new((math.random()-0.5)*spAmt,(math.random()-0.5)*spAmt,(math.random()-0.5)*spAmt)
+                table.insert(newD, dir+sp)
+            end
+            lastDmg = true
+            task.spawn(function()
+                for i=1,#newD do task.wait(0.01); pcall(function() ZFK_remote:FireServer("🧈", gun, sc, i, tp, hitPos, newD[i]) end) end
+            end)
+            if gun:FindFirstChild("Hitmarker") and lastDmg then gun.Hitmarker:Fire(tp) end
+            if lastDmg then return st, sc, gun, ft, sPos, newD, silenced end
+            return st, sc, gun, ft, sPos, dirs, silenced
+        end)
+        table.insert(SAConns, c)
     end
+end
+
+function SA_Enable()
+    if SA.On then return end
+    SA.On = true
+    crFOVCircle(); startSALoop(); hookShoot()
+end
+
+function SA_Disable()
+    if not SA.On then return end
+    SA.On = false
+    if SALoopConn then SALoopConn:Disconnect(); SALoopConn = nil end
+    if SACircle then SACircle:Remove(); SACircle = nil end
+    for _, c in pairs(SAConns) do if c then c:Disconnect() end end; SAConns = {}
+    _G.CurSATarget = nil; lastT = nil; lastDmg = false
 end
 
 --========================== Infinite Stamina ========================--
@@ -2716,91 +2930,6 @@ do
 
 end
 
---======================= NO RECOIL =========================--
-
-local NoRecoil_Enabled=false
-local NoRecoil_Connections={}
-local GlobalOriginalValues={}
-local WeaponCache={}
-local Settings={GunMods={NoRecoil=true,Spread=true,SpreadAmount=0}}
-local Player_nr=LocalPlayer
-
-local function cacheWeapons()
-    WeaponCache={};
-    for _, v in pairs(getgc(true)) do
-        if type(v)=='table' and rawget(v,'EquipTime') then
-            table.insert(WeaponCache, v);
-            if not GlobalOriginalValues[v] then
-                GlobalOriginalValues[v]={
-                    Recoil=v.Recoil,CameraRecoilingEnabled=v.CameraRecoilingEnabled,
-                    AngleX_Min=v.AngleX_Min,AngleX_Max=v.AngleX_Max,
-                    AngleY_Min=v.AngleY_Min,AngleY_Max=v.AngleY_Max,
-                    AngleZ_Min=v.AngleZ_Min,AngleZ_Max=v.AngleZ_Max,
-                    Spread=v.Spread
-                }
-            end
-        end
-    end
-end
-
-local function applyGunMods()
-    for _, weapon in ipairs(WeaponCache) do
-        if Settings.GunMods.NoRecoil then
-            weapon.Recoil=0; weapon.CameraRecoilingEnabled=false;
-            weapon.AngleX_Min=0; weapon.AngleX_Max=0;
-            weapon.AngleY_Min=0; weapon.AngleY_Max=0;
-            weapon.AngleZ_Min=0; weapon.AngleZ_Max=0;
-        end;
-        if Settings.GunMods.Spread then
-            weapon.Spread=Settings.GunMods.SpreadAmount
-        end
-    end
-end
-
-local function resetGunMods()
-    for weapon, values in pairs(GlobalOriginalValues) do
-        weapon.Recoil=values.Recoil; weapon.CameraRecoilingEnabled=values.CameraRecoilingEnabled;
-        weapon.AngleX_Min=values.AngleX_Min; weapon.AngleX_Max=values.AngleX_Max;
-        weapon.AngleY_Min=values.AngleY_Min; weapon.AngleY_Max=values.AngleY_Max;
-        weapon.AngleZ_Min=values.AngleZ_Min; weapon.AngleZ_Max=values.AngleZ_Max;
-        weapon.Spread=values.Spread;
-    end
-end
-
-local function handleWeapon(weapon)
-    if NoRecoil_Enabled then
-        task.wait(0.1);
-        cacheWeapons();
-        applyGunMods()
-    end
-end
-
-local function onCharacterAdded_nr(character)
-    for _, child in ipairs(character:GetChildren()) do if child:IsA("Tool") then handleWeapon(child) end end;
-    table.insert(NoRecoil_Connections, character.ChildAdded:Connect(function(child) if child:IsA("Tool") then handleWeapon(child) end end));
-    local humanoid=character:WaitForChild("Humanoid",2);
-    if humanoid then
-        table.insert(NoRecoil_Connections, humanoid.Died:Connect(function() if NoRecoil_Enabled then task.wait(1.5); cacheWeapons(); applyGunMods() end end))
-    end
-end
-
-function NoRecoil_Enable()
-    if NoRecoil_Enabled then return end;
-    NoRecoil_Enabled=true;
-    cacheWeapons();
-    applyGunMods();
-    table.insert(NoRecoil_Connections, Player_nr.CharacterAdded:Connect(onCharacterAdded_nr));
-    if Player_nr.Character then onCharacterAdded_nr(Player_nr.Character) end
-end
-
-function NoRecoil_Disable()
-    if not NoRecoil_Enabled then return end;
-    NoRecoil_Enabled=false;
-    resetGunMods();
-    for _, conn in ipairs(NoRecoil_Connections) do conn:Disconnect() end;
-    NoRecoil_Connections={};
-end
-
 --======================= WALLHACK (ESP) =========================--
 local ESP_Enabled = false
 local espConnection = nil
@@ -2817,27 +2946,24 @@ local function updESP()
                 if ESP_Enabled and root and myRoot then
                     local distance = (root.Position - myRoot.Position).Magnitude
                     
-                    -- Verificăm distanța de 1000 studs
+                    if not hl then
+                        hl = Instance.new("Highlight")
+                        hl.Name = "MyESP"
+                        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        hl.FillTransparency = 1 
+                        hl.OutlineTransparency = 0 
+                        hl.OutlineColor = Color3.fromRGB(115, 90, 250)
+                        hl.Parent = char
+                    end
+                    
+                    -- Optimized distance check (no Destroy on every frame)
                     if distance <= 1000 then
-                        if not hl then
-                            hl = Instance.new("Highlight")
-                            hl.Name = "MyESP"
-                            hl.Parent = char
-                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        end
-                        
-                        -- SETĂRI PENTRU ASPECT MOV (Ca în meniu):
-                        hl.FillTransparency = 1 -- Interior transparent
-                        hl.OutlineTransparency = 0 -- Margine vizibilă
-                        hl.OutlineColor = Color3.fromRGB(115, 90, 250) -- MOVUL TĂU
                         hl.Enabled = true
                     else
-                        -- Dacă e prea departe, scoatem Highlight-ul
-                        if hl then hl:Destroy() end
+                        hl.Enabled = false
                     end
                 else
-                    -- Dacă ESP e oprit sau inamicul e invalid, scoatem Highlight-ul
-                    if hl then hl:Destroy() end
+                    if hl then hl.Enabled = false end
                 end
             end
         end
@@ -3143,6 +3269,201 @@ local function createActionButtonFrame(labelText, buttonText, actionFunction)
     return frame
 end
 
+local function createSliderRowFrame(labelText, min, max, default, updateFn)
+    local frame = Instance.new("Frame")
+    frame.Name = labelText .. "_SliderRow"
+    frame.Size = UDim2.new(1, -10, 0, 50)
+    frame.BackgroundTransparency = 1
+    
+    local label = Instance.new("TextLabel")
+    label.Parent = frame
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Position = UDim2.new(0, 5, 0, 2)
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1
+
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Parent = frame
+    valueLabel.Size = UDim2.new(0, 40, 0, 20)
+    valueLabel.Position = UDim2.new(1, -45, 0, 2)
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 12
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.BackgroundTransparency = 1
+
+    -- BARA DE FUNDAL (MICȘORATĂ la 8 pixeli)
+    local sliderBack = Instance.new("Frame")
+    sliderBack.Parent = frame
+    sliderBack.Size = UDim2.new(1, -15, 0, 8) -- Grosime de 8px
+    sliderBack.Position = UDim2.new(0, 5, 0, 31)
+    sliderBack.BackgroundColor3 = Color3.fromRGB(25, 25, 30) 
+    sliderBack.BorderSizePixel = 0
+    
+    local backCorner = Instance.new("UICorner")
+    backCorner.CornerRadius = UDim.new(1, 0)
+    backCorner.Parent = sliderBack
+
+    -- BARA DE PROGRES (VIOLET MAT - Grosime 8px)
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Parent = sliderBack
+    sliderFill.BackgroundColor3 = Color3.fromRGB(90, 85, 160) -- Culoarea violet cerută
+    sliderFill.BorderSizePixel = 0
+    sliderFill.ZIndex = 2
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = sliderFill
+
+    -- PUNCTUL (MICȘORAT la 12 pixeli)
+    local sliderKnob = Instance.new("ImageButton")
+    sliderKnob.Parent = sliderBack
+    sliderKnob.Size = UDim2.new(0, 12, 0, 12) -- Diametru de 12px
+    sliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    sliderKnob.ZIndex = 3
+    sliderKnob.BackgroundColor3 = Color3.fromRGB(202, 203, 214) 
+    sliderKnob.BorderSizePixel = 0
+    
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = sliderKnob
+
+    local function updateVisuals(percent)
+        sliderKnob.Position = UDim2.new(percent, 0, 0.5, 0)
+        sliderFill.Size = UDim2.new(percent, 0, 1, 0) -- Umplere în spatele punctului
+    end
+
+    local initialPercent = (default - min) / (max - min)
+    updateVisuals(initialPercent)
+
+    local UserInputService = game:GetService("UserInputService")
+    local dragging = false
+
+    local function update(input)
+        local pos = math.clamp((input.Position.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + (max - min) * pos)
+        updateVisuals(pos)
+        valueLabel.Text = tostring(val)
+        updateFn(val)
+    end
+
+    sliderKnob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
+    end)
+    sliderBack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then update(input) end
+    end)
+
+    return frame
+end
+
+local function createDropdownRowFrame(labelText, options, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 35)
+    frame.BackgroundTransparency = 1
+    frame.ZIndex = 10 
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.4, 0, 0, 35)
+    label.Text = "  " .. labelText
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13; label.TextXAlignment = Enum.TextXAlignment.Left
+    label.BackgroundTransparency = 1; label.Parent = frame
+
+    local dropBtn = Instance.new("TextButton")
+    dropBtn.Size = UDim2.new(0.5, 0, 0, 28)
+    dropBtn.Position = UDim2.new(0.5, 0, 0, 3)
+    dropBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    dropBtn.Text = " " .. default
+    dropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dropBtn.Font = Enum.Font.GothamSemibold
+    dropBtn.TextXAlignment = Enum.TextXAlignment.Left
+    dropBtn.Parent = frame
+    dropBtn.TextSize = 12
+    Instance.new("UICorner", dropBtn).CornerRadius = UDim.new(0, 4)
+    local stroke = Instance.new("UIStroke", dropBtn)
+    stroke.Color = Color3.fromRGB(45, 45, 55)
+
+    local arrowIcon = Instance.new("TextLabel")
+    arrowIcon.Size = UDim2.new(0, 20, 1, 0)
+    arrowIcon.Position = UDim2.new(1, -25, 0, 0)
+    arrowIcon.BackgroundTransparency = 1
+    arrowIcon.Text = "▼"
+    arrowIcon.TextColor3 = Color3.fromRGB(150, 150, 150)
+    arrowIcon.Font = Enum.Font.Gotham
+    arrowIcon.TextSize = 12
+    arrowIcon.Parent = dropBtn
+
+    local listHolder = Instance.new("ScrollingFrame")
+    listHolder.Name = "ListHolder"
+    listHolder.Parent = dropBtn
+    listHolder.Visible = false
+    listHolder.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    listHolder.BorderSizePixel = 0
+    listHolder.Position = UDim2.new(0, 0, 1, 4)
+    listHolder.Size = UDim2.new(1, 0, 0, math.clamp(#options * 28, 28, 140))
+    listHolder.ZIndex = 15
+    listHolder.ScrollBarThickness = 2
+    listHolder.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 90)
+    listHolder.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
+    Instance.new("UICorner", listHolder).CornerRadius = UDim.new(0, 4)
+    local listStroke = Instance.new("UIStroke", listHolder)
+    listStroke.Color = Color3.fromRGB(45, 45, 55)
+
+    local layout = Instance.new("UIListLayout", listHolder)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local isOpen = false
+
+    for _, option in ipairs(options) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, 0, 0, 28)
+        optBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+        optBtn.BorderSizePixel = 0
+        optBtn.Text = "  " .. option
+        optBtn.TextXAlignment = Enum.TextXAlignment.Left
+        optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        optBtn.Font = Enum.Font.GothamMedium
+        optBtn.TextSize = 12
+        optBtn.Parent = listHolder
+        optBtn.ZIndex = 16
+
+        optBtn.MouseEnter:Connect(function()
+            TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 40, 50), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        end)
+        optBtn.MouseLeave:Connect(function()
+            TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20, 20, 25), TextColor3 = Color3.fromRGB(200, 200, 200)}):Play()
+        end)
+
+        optBtn.MouseButton1Click:Connect(function()
+            dropBtn.Text = " " .. option
+            isOpen = false
+            listHolder.Visible = false
+            TweenService:Create(arrowIcon, TweenInfo.new(0.2), {Rotation = 0}):Play()
+            callback(option)
+        end)
+    end
+
+    dropBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        listHolder.Visible = isOpen
+        TweenService:Create(arrowIcon, TweenInfo.new(0.2), {Rotation = isOpen and 180 or 0}):Play()
+    end)
+
+    return frame
+end
 
 local EQR_UI = {}
 
@@ -3150,10 +3471,15 @@ local EQR_UI = {}
 -- 1. Proprietăți UI
 -------------------------------------------------------------------------------
 
-EQR_UI.Categories = { "Combat", "Movement", "Visuals", "Farming", "Misc", "Rage" }
+EQR_UI.Categories = { "Combat", "Movement", "Visuals", "Farming", "Misc" }
+EQR_UI.SubCategories = {
+    Combat = {"Aimbots", "Melee", "Rage", "Weapons"}
+}
 EQR_UI.CategoryButtons = {}
+EQR_UI.SubCategoryButtons = {}
 EQR_UI.CategoryFrames = {}
 EQR_UI.ActiveCategoryButton = nil
+EQR_UI.ActiveSubCategoryButton = nil
 EQR_UI.DefaultCategory = "Combat"
 
 EQR_UI.KeyBinds = {
@@ -3195,23 +3521,78 @@ function EQR_UI:SwitchCategory(categoryName)
     categoryButton.TextLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
     self.ActiveCategoryButton = categoryButton
 
+    for _, child in ipairs(subTabContainer:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    self.SubCategoryButtons = {}
+    self.ActiveSubCategoryButton = nil
+
+    if self.SubCategories[categoryName] then
+        subTabContainer.Visible = true
+        contentFrame.Position = UDim2.new(0, 140, 0, 85)
+        contentFrame.Size = UDim2.new(1, -150, 1, -105)
+        
+        local tabCount = #self.SubCategories[categoryName]
+        local padValue = 5
+        local offset = math.floor(((tabCount - 1) * padValue) / tabCount)
+        
+        for i, subName in ipairs(self.SubCategories[categoryName]) do
+            local subBtn = Instance.new("TextButton")
+            subBtn.Name = subName .. "Btn"
+            subBtn.Size = UDim2.new(1/tabCount, -offset, 1, 0)
+            subBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+            subBtn.BorderSizePixel = 0
+            subBtn.Text = subName
+            subBtn.TextColor3 = Color3.fromRGB(150, 150, 160)
+            subBtn.Font = Enum.Font.GothamMedium
+            subBtn.TextSize = 12
+            subBtn.AutoButtonColor = false
+            subBtn.LayoutOrder = i
+            subBtn.Parent = subTabContainer
+            Instance.new("UICorner", subBtn).CornerRadius = UDim.new(0, 6)
+            
+            self.SubCategoryButtons[subName] = subBtn
+            subBtn.MouseButton1Click:Connect(function()
+                self:SwitchSubCategory(categoryName, subName)
+            end)
+        end
+        self:SwitchSubCategory(categoryName, self.SubCategories[categoryName][1])
+    else
+        subTabContainer.Visible = false
+        contentFrame.Position = UDim2.new(0, 140, 0, 50)
+        contentFrame.Size = UDim2.new(1, -150, 1, -70)
+        self:LoadItems(categoryName)
+    end
+end
+
+function EQR_UI:SwitchSubCategory(catName, subName)
+    local subBtn = self.SubCategoryButtons[subName]
+    if not subBtn then return end
+
+    if self.ActiveSubCategoryButton then
+        TweenService:Create(self.ActiveSubCategoryButton, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(30, 30, 35) }):Play()
+        self.ActiveSubCategoryButton.TextColor3 = Color3.fromRGB(150, 150, 160)
+    end
+
+    TweenService:Create(subBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(50, 50, 60) }):Play()
+    subBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    self.ActiveSubCategoryButton = subBtn
+
+    self:LoadItems(catName .. "_" .. subName)
+end
+
+function EQR_UI:LoadItems(storageKey)
     for _, child in ipairs(contentFrame:GetChildren()) do
         if child:IsA("Frame") and child.Name ~= "UIListLayout" and child.Name ~= "UICorner" then
             child.Parent = nil
         end
     end
 
-    if self.CategoryFrames[categoryName] then
-        for i, frame in ipairs(self.CategoryFrames[categoryName]) do
+    if self.CategoryFrames[storageKey] then
+        for i, frame in ipairs(self.CategoryFrames[storageKey]) do
             frame.Parent = contentFrame
             frame.LayoutOrder = i
         end
-        local numItems = #self.CategoryFrames[categoryName]
-        local itemHeight = 35
-        local padding = contentLayout.Padding.Offset
-        contentFrame.CanvasSize = UDim2.new(0, 0, 0, numItems * itemHeight + (numItems > 0 and (numItems - 1) * padding or 0) + 10)
-    else
-        contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     end
 end
 
@@ -3291,7 +3672,13 @@ end
 
 function EQR_UI:Initialize()
     for i, categoryName in ipairs(self.Categories) do
-        self.CategoryFrames[categoryName] = {}
+        if self.SubCategories[categoryName] then
+            for _, subName in ipairs(self.SubCategories[categoryName]) do
+                self.CategoryFrames[categoryName .. "_" .. subName] = {}
+            end
+        else
+            self.CategoryFrames[categoryName] = {}
+        end
 
         local catButton = Instance.new("TextButton")
         catButton.Name = categoryName .. "Button"
@@ -3308,7 +3695,11 @@ function EQR_UI:Initialize()
 local stroke = Instance.new("UIStroke")
         stroke.Thickness = 1.5
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Color = Color3.fromRGB(60, 60, 65)
+        if categoryName == "Combat" then
+            stroke.Color = Color3.fromRGB(115, 90, 250) -- Mov pentru Combat
+        else
+            stroke.Color = Color3.fromRGB(60, 60, 65) -- Gri pentru restul
+        end
         stroke.Parent = catButton
 
         local catLabel = Instance.new("TextLabel")
@@ -3348,13 +3739,110 @@ local stroke = Instance.new("UIStroke")
 
     local k = self.KeyBinds
 
-    -- Combat
-    table.insert(self.CategoryFrames.Combat, createToggleRowFrame("Melee Aura", true, function() return MeleeAura_Enabled end, MeleeAura_Enable, MeleeAura_Disable, function() return k.melee end, function(val) k.melee=val end))
-    table.insert(self.CategoryFrames.Combat, createToggleRowFrame("Aimbot", true, function() return AimBotSettings.Enabled end, Aimbot_Enable, Aimbot_Disable, function() return k.aimbot end, function(val) k.aimbot=val; AimBotSettings.Keybind=val end))
-    table.insert(self.CategoryFrames.Combat, createToggleRowFrame("No Recoil", true, function() return NoRecoil_Enabled end, NoRecoil_Enable, NoRecoil_Disable, function() return k.noRecoil end, function(val) k.noRecoil=val end))
+    -- Combat_Melee
+    table.insert(self.CategoryFrames.Combat_Melee, createToggleRowFrame("Melee Aura", true, function() return MeleeAura_Enabled end, MeleeAura_Enable, MeleeAura_Disable, function() return k.melee end, function(val) k.melee=val end))
+    -- Combat_Aimbots
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Camera Aimbot", true, 
+    function() return AimBotSettings.Enabled end, 
+    function() AimBotSettings.Enabled = true end, 
+    function() AimBotSettings.Enabled = false end, 
+    function() return k.aimbot end, 
+    function(val) k.aimbot = val end
+))
 
-    -- Movement
-    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Fly", true, function() return Fly_Enabled end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Show FOV Circle", true, 
+    function() return AimBotSettings.ShowFOV end, 
+    function() AimBotSettings.ShowFOV = true end, 
+    function() AimBotSettings.ShowFOV = false end, 
+    function() return k.showfov end, 
+    function(val) k.showfov = val end
+))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Aimbot FOV", 0, 500, 100, function(v) 
+    AimBotSettings.FOV = v 
+    if FOVCircle then FOVCircle.Radius = v end
+end))
+
+    AimBotSettings.AimPart = "Head"
+    table.insert(self.CategoryFrames.Combat_Aimbots, createDropdownRowFrame("Target Part", 
+    {"Head", "Torso", "HumanoidRootPart", "Right Arm", "Left Arm", "Right Leg", "Left Leg", "Random"}, 
+    "Head", 
+    function(v)
+        AimBotSettings.AimPart = v 
+        print("Aimbot va ținti: " .. v)
+    end
+))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Aimbot Smoothing", 0, 100, 5, function(v)
+    AimBotSettings.Smoothing = v / 100
+end))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Wall Check", true, 
+    function() return AimBotSettings.WallCheck end, 
+    function() AimBotSettings.WallCheck = true end, 
+    function() AimBotSettings.WallCheck = false end, 
+    function() return k.wallcheck end, 
+    function(val) k.wallcheck = val end
+))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Downed Check", true, 
+    function() return AimBotSettings.DownedCheck end, 
+    function() AimBotSettings.DownedCheck = true; SA.ChkDowned = true end, 
+    function() AimBotSettings.DownedCheck = false; SA.ChkDowned = false end, 
+    function() return k.downedcheck end, 
+    function(val) k.downedcheck = val end
+))
+
+local saDivider = Instance.new("Frame")
+saDivider.Name = "SADivider"
+saDivider.Size = UDim2.new(1, 0, 0, 2)
+saDivider.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+saDivider.BorderSizePixel = 0
+table.insert(self.CategoryFrames.Combat_Aimbots, saDivider)
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Silent Aim", true, 
+    function() return SA.On end, 
+    function() SA_Enable() end, 
+    function() SA_Disable() end, 
+    function() return k.silentaim end, 
+    function(val) k.silentaim = val end
+))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createToggleRowFrame("Silent Show FOV", true, 
+    function() return SA.DrawCircle end, 
+    function() SA.DrawCircle = true; if SA.On then crFOVCircle() end end, 
+    function() SA.DrawCircle = false; if SACircle then SACircle:Remove(); SACircle = nil end end, 
+    function() return k.silentshowfov end, 
+    function(val) k.silentshowfov = val end
+))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Head Chance %", 0, 100, 80, function(v) 
+    SA.HeadChance = v 
+end))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Body Chance %", 0, 100, 20, function(v) 
+    SA.BodyChance = v 
+end))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Silent FOV", 10, 500, 100, function(v) 
+    SA.DrawSize = v 
+    if SACircle then SACircle.Radius = v end
+end))
+
+table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Silent Max Dist", 0, 1000, 500, function(v) 
+    SA.MaxDist = v 
+end))
+
+    -- Combat_Weapons
+    table.insert(self.CategoryFrames.Combat_Weapons, createToggleRowFrame("No Recoil", true, 
+    function() return NRSettings.Enabled end, 
+    function() enableNoRecoil() end, 
+    function() disableNoRecoil() end, 
+    function() return k.norecoil end, 
+    function(val) k.norecoil = val end
+))
+
+    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Fly", true, function() return FlySettings.On end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
     table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Noclip", true, function() return Noclip_Enabled end, Noclip_Enable, Noclip_Disable, function() return k.noclip end, function(val) k.noclip=val; Noclip_Bind=val end))
     table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Infinite Stamina", true, function() return InfStamina_Enabled end, InfStamina_Enable, InfStamina_Disable, function() return k.infiniteStamina end, function(val) k.infiniteStamina = val end))
 
@@ -3364,6 +3852,9 @@ local stroke = Instance.new("UIStroke")
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("Safe ESP", true, function() return BredMakurz_Enabled end, BredMakurz_Enable, BredMakurz_Disable, function() return k.safeESP end, function(val) k.safeESP=val end))
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("FullBright", true, function() return FullBright_Enabled end, FullBright_Enable, FullBright_Disable, function() return k.FullBright end, function(val) k.FullBright=val; FullBright_Bind=val end))
     table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("FOV", true, function() return Fov_Enabled end, Fov_Enable, Fov_Disable, function() return k.fov end, function(val) k.fov=val; Fov_Bind=val end))
+    table.insert(self.CategoryFrames.Visuals, createSliderRowFrame("Camera FOV", 50, 120, 80, function(v) 
+        Fov_Value = v 
+    end))
 
     -- Farming
     table.insert(self.CategoryFrames.Farming, createToggleRowFrame("Autofarm", true, function() return autofarmEnabled end, Autofarm_Enable, Autofarm_Disable, function() return k.autofarm end, function(val) k.autofarm=val; Autofarm_Bind=val end))
@@ -3375,8 +3866,8 @@ local stroke = Instance.new("UIStroke")
     table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Auto Unlock Doors", true, function() return UnlockNearbyDoors_Enabled end, UnlockNearbyDoors_Enable, UnlockNearbyDoors_Disable, function() return k.unlockNearbyDoors end, function(val) k.unlockNearbyDoors=val end))
     table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Auto Open Doors", true, function() return OpenNearbyDoors_Enabled end, OpenNearbyDoors_Enable, OpenNearbyDoors_Disable, function() return k.openNearbyDoors end, function(val) k.openNearbyDoors=val end))
 
-    -- Rage
-    table.insert(self.CategoryFrames.Rage, createToggleRowFrame("Ragebot", true, function() return Ragebot_Enabled end, Ragebot_Enable, Ragebot_Disable, function() return k.ragebot end, function(val) k.ragebot=val end))
+    -- Combat_Rage
+    table.insert(self.CategoryFrames.Combat_Rage, createToggleRowFrame("Ragebot", true, function() return Ragebot_Enabled end, Ragebot_Enable, Ragebot_Disable, function() return k.ragebot end, function(val) k.ragebot=val end))
     
     UserInputService.InputBegan:Connect(function(...) self:OnInputBegan(...) end)
     PlayerGui.ChildAdded:Connect(function(Item)
@@ -3398,3 +3889,197 @@ end
 -- 3. ЗАПУСК
 -------------------------------------------------------------------------------
 EQR_UI:Initialize()
+-------------------------------------------------------------------------------
+-- 4. LOGICA DE AIMBOT (MULTI-PART DETECTION & ULTRA-STICKY)
+-------------------------------------------------------------------------------
+
+local LockedTarget = nil 
+
+local function isDowned(character)
+    if not character then return false end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        local state = humanoid:GetState()
+        if state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.PlatformStanding or state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown then
+            return true
+        end
+        if humanoid.Health <= 0 then
+            return true
+        end
+    end
+    -- Da Hood specific K.O. check
+    local bodyEffects = character:FindFirstChild("BodyEffects")
+    if bodyEffects then
+        local ko = bodyEffects:FindFirstChild("K.O") or bodyEffects:FindFirstChild("KO")
+        if ko and (ko.Value == true or ko.Value == 1) then
+            return true
+        end
+        local dead = bodyEffects:FindFirstChild("Dead")
+        if dead and (dead.Value == true or dead.Value == 1) then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetClosestTarget()
+    local target = nil
+    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+    local cam = workspace.CurrentCamera
+    local lp = game.Players.LocalPlayer
+    local char = lp.Character
+    
+    local maxLimit = AimBotSettings.FOV or 100
+    local bestScore = math.huge 
+
+    local R6Parts = {"Head", "Torso", "HumanoidRootPart", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p ~= lp and p.Character then
+            local humanoid = p.Character:FindFirstChild("Humanoid")
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if humanoid and hrp and humanoid.Health > 0 then
+                
+                if AimBotSettings.DownedCheck and isDowned(p.Character) then
+                    continue
+                end
+
+                local charHrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not charHrp then continue end
+                
+                local distInStuds = (hrp.Position - charHrp.Position).Magnitude
+                if distInStuds > 600 then continue end
+
+                if AimBotSettings.WallCheck then
+                    local head = p.Character:FindFirstChild("Head") or hrp
+                    local ray = Ray.new(cam.CFrame.Position, (head.Position - cam.CFrame.Position).Unit * 1000)
+                    local hit = workspace:FindPartOnRayWithIgnoreList(ray, {char, cam})
+                    if hit and not hit:IsDescendantOf(p.Character) then
+                        continue
+                    end
+                end
+
+                for _, partName in pairs(R6Parts) do
+                    local part = p.Character:FindFirstChild(partName)
+                    
+                    if part and part:IsA("BasePart") then
+                        local pos, onScreen = cam:WorldToViewportPoint(part.Position)
+                        
+                        if onScreen then
+                            local screenPos = Vector2.new(pos.X, pos.Y)
+                            local distFromMouse = (screenPos - mousePos).Magnitude
+                            
+                            if distFromMouse <= maxLimit then
+                                local score = distFromMouse + (distInStuds * 2) 
+
+                                if score < bestScore then
+                                    bestScore = score
+                                    target = p
+                                end
+                                break 
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    local UserInputService = game:GetService("UserInputService")
+    local mouseLoc = UserInputService:GetMouseLocation()
+    
+    -- Cerc FOV Camera
+    if AimBotSettings.Enabled and AimBotSettings.ShowFOV then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = AimBotSettings.FOV or 100
+        FOVCircle.Position = mouseLoc
+    else
+        FOVCircle.Visible = false
+    end
+
+    -- Logica Aimbot
+    if AimBotSettings.Enabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local isTargetValid = false
+        
+        if LockedTarget and LockedTarget.Character then
+            local hum = LockedTarget.Character:FindFirstChild("Humanoid")
+            local targetPart = nil
+            if AimBotSettings.AimPart == "Random" then
+                targetPart = LockedTarget.Character:FindFirstChild("HumanoidRootPart") or LockedTarget.Character:FindFirstChild("Head")
+            else
+                targetPart = LockedTarget.Character:FindFirstChild(AimBotSettings.AimPart or "Head")
+            end
+            
+            if hum and hum.Health > 0 and targetPart then
+                isTargetValid = true
+                if AimBotSettings.DownedCheck and isDowned(LockedTarget.Character) then
+                    isTargetValid = false
+                end
+                
+                if isTargetValid and AimBotSettings.WallCheck then
+                    local cam = workspace.CurrentCamera
+                    local char = game.Players.LocalPlayer.Character
+                    local head = LockedTarget.Character:FindFirstChild("Head") or LockedTarget.Character:FindFirstChild("HumanoidRootPart")
+                    if head and char then
+                        local ray = Ray.new(cam.CFrame.Position, (head.Position - cam.CFrame.Position).Unit * 1000)
+                        local hit = workspace:FindPartOnRayWithIgnoreList(ray, {char, cam})
+                        if hit and not hit:IsDescendantOf(LockedTarget.Character) then
+                            isTargetValid = false
+                        end
+                    end
+                end
+            end
+            
+            if not isTargetValid then
+                LockedTarget = nil
+            end
+        end
+
+        if not isTargetValid then
+            LockedTarget = GetClosestTarget()
+        end
+
+        if LockedTarget and LockedTarget.Character then
+            local finalPart = nil
+            
+            if AimBotSettings.AimPart == "Random" then
+                local closestPart = nil
+                local shortestDist = math.huge
+                local mousePos = UserInputService:GetMouseLocation()
+                local cam = workspace.CurrentCamera
+                
+                for _, part in ipairs(LockedTarget.Character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        local pos, onScreen = cam:WorldToViewportPoint(part.Position)
+                        if onScreen then
+                            local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                            if dist < shortestDist then
+                                closestPart = part
+                                shortestDist = dist
+                            end
+                        end
+                    end
+                end
+                finalPart = closestPart
+            else
+                finalPart = LockedTarget.Character:FindFirstChild(AimBotSettings.AimPart or "Head")
+            end
+            
+            if finalPart then
+                local cam = workspace.CurrentCamera
+                local hitPosition = finalPart.Position
+
+                local lookAt = CFrame.lookAt(cam.CFrame.Position, hitPosition)
+                local smoothVal = AimBotSettings.Smoothing or 0.05
+                cam.CFrame = cam.CFrame:Lerp(lookAt, smoothVal)
+            end
+        end
+    else
+        LockedTarget = nil
+    end
+end)
+
+
