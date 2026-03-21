@@ -159,7 +159,7 @@ subTabContainer.Visible = false
 subTabContainer.Parent = mainFrame
 local subTabLayout = Instance.new("UIListLayout")
 subTabLayout.FillDirection = Enum.FillDirection.Horizontal
-subTabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+subTabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 subTabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 subTabLayout.Padding = UDim.new(0, 5)
 subTabLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -3473,7 +3473,11 @@ local EQR_UI = {}
 
 EQR_UI.Categories = { "Combat", "Movement", "Visuals", "Farming", "Misc" }
 EQR_UI.SubCategories = {
-    Combat = {"Aimbots", "Melee", "Rage", "Weapons"}
+    Combat = {"Aimbots", "Melee", "Rage", "Weapons"},
+    Movement = {"Main"},
+    Visuals = {"ESP", "World"},
+    Farming = {"Farming"},
+    Misc = {"Misc"}
 }
 EQR_UI.CategoryButtons = {}
 EQR_UI.SubCategoryButtons = {}
@@ -3533,13 +3537,14 @@ function EQR_UI:SwitchCategory(categoryName)
         contentFrame.Size = UDim2.new(1, -150, 1, -105)
         
         local tabCount = #self.SubCategories[categoryName]
+        local effectiveTabCount = math.max(4, tabCount)
         local padValue = 5
-        local offset = math.floor(((tabCount - 1) * padValue) / tabCount)
+        local offset = math.floor(((effectiveTabCount - 1) * padValue) / effectiveTabCount)
         
         for i, subName in ipairs(self.SubCategories[categoryName]) do
             local subBtn = Instance.new("TextButton")
             subBtn.Name = subName .. "Btn"
-            subBtn.Size = UDim2.new(1/tabCount, -offset, 1, 0)
+            subBtn.Size = UDim2.new(1/effectiveTabCount, -offset, 1, 0)
             subBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
             subBtn.BorderSizePixel = 0
             subBtn.Text = subName
@@ -3842,29 +3847,30 @@ end))
     function(val) k.norecoil = val end
 ))
 
-    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Fly", true, function() return FlySettings.On end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
-    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Noclip", true, function() return Noclip_Enabled end, Noclip_Enable, Noclip_Disable, function() return k.noclip end, function(val) k.noclip=val; Noclip_Bind=val end))
-    table.insert(self.CategoryFrames.Movement, createToggleRowFrame("Infinite Stamina", true, function() return InfStamina_Enabled end, InfStamina_Enable, InfStamina_Disable, function() return k.infiniteStamina end, function(val) k.infiniteStamina = val end))
+    table.insert(self.CategoryFrames.Movement_Main, createToggleRowFrame("Fly", true, function() return FlySettings.On end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
+    table.insert(self.CategoryFrames.Movement_Main, createToggleRowFrame("Noclip", true, function() return Noclip_Enabled end, Noclip_Enable, Noclip_Disable, function() return k.noclip end, function(val) k.noclip=val; Noclip_Bind=val end))
+    table.insert(self.CategoryFrames.Movement_Main, createToggleRowFrame("Infinite Stamina", true, function() return InfStamina_Enabled end, InfStamina_Enable, InfStamina_Disable, function() return k.infiniteStamina end, function(val) k.infiniteStamina = val end))
 
     -- Visuals
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("ESP", true, function() return ESP_Enabled end, ESP_Enable, ESP_Disable, function() return k.esp end, function(val) k.esp = val end))
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("Invisibility", true, _G.IsInvisEnabled, _G.Invis_Enable, _G.Invis_Disable, function() return k.invis end, function(val) k.invis=val end))
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("Safe ESP", true, function() return BredMakurz_Enabled end, BredMakurz_Enable, BredMakurz_Disable, function() return k.safeESP end, function(val) k.safeESP=val end))
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("FullBright", true, function() return FullBright_Enabled end, FullBright_Enable, FullBright_Disable, function() return k.FullBright end, function(val) k.FullBright=val; FullBright_Bind=val end))
-    table.insert(self.CategoryFrames.Visuals, createToggleRowFrame("FOV", true, function() return Fov_Enabled end, Fov_Enable, Fov_Disable, function() return k.fov end, function(val) k.fov=val; Fov_Bind=val end))
-    table.insert(self.CategoryFrames.Visuals, createSliderRowFrame("Camera FOV", 50, 120, 80, function(v) 
+    table.insert(self.CategoryFrames.Visuals_ESP, createToggleRowFrame("Player ESP", true, function() return ESP_Enabled end, ESP_Enable, ESP_Disable, function() return k.esp end, function(val) k.esp = val end))
+    table.insert(self.CategoryFrames.Visuals_ESP, createToggleRowFrame("Safe/Register ESP", true, function() return BredMakurz_Enabled end, BredMakurz_Enable, BredMakurz_Disable, function() return k.safeESP end, function(val) k.safeESP=val end))
+
+    table.insert(self.CategoryFrames.Visuals_World, createToggleRowFrame("Invisibility", true, _G.IsInvisEnabled, _G.Invis_Enable, _G.Invis_Disable, function() return k.invis end, function(val) k.invis=val end))
+    table.insert(self.CategoryFrames.Visuals_World, createToggleRowFrame("FullBright", true, function() return FullBright_Enabled end, FullBright_Enable, FullBright_Disable, function() return k.FullBright end, function(val) k.FullBright=val; FullBright_Bind=val end))
+    table.insert(self.CategoryFrames.Visuals_World, createToggleRowFrame("FOV", true, function() return Fov_Enabled end, Fov_Enable, Fov_Disable, function() return k.fov end, function(val) k.fov=val; Fov_Bind=val end))
+    table.insert(self.CategoryFrames.Visuals_World, createSliderRowFrame("Camera FOV", 50, 120, 80, function(v) 
         Fov_Value = v 
     end))
 
     -- Farming
-    table.insert(self.CategoryFrames.Farming, createToggleRowFrame("Autofarm", true, function() return autofarmEnabled end, Autofarm_Enable, Autofarm_Disable, function() return k.autofarm end, function(val) k.autofarm=val; Autofarm_Bind=val end))
+    table.insert(self.CategoryFrames.Farming_Farming, createToggleRowFrame("Autofarm", true, function() return autofarmEnabled end, Autofarm_Enable, Autofarm_Disable, function() return k.autofarm end, function(val) k.autofarm=val; Autofarm_Bind=val end))
     
     -- Misc
-    table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Staff Detector", true, function() return AdminCheck_Enabled end, AdminCheck_Enable, AdminCheck_Disable, function() return k.adminCheck end, function(val) k.adminCheck=val end))
-    table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Auto Pickup Money", true, function() return AutoPickupMoney_Enabled end, AutoPickupMoney_Enable, AutoPickupMoney_Disable, function() return k.autoPickupMoney end, function(val) k.autoPickupMoney=val end))
-    table.insert(self.CategoryFrames.Misc, createToggleRowFrame("No Fail Lockpick", true, function() return NoFailLockpick_Enabled end, NoFailLockpick_Enable, NoFailLockpick_Disable, function() return k.noFailLockpick end, function(val) k.noFailLockpick=val end))
-    table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Auto Unlock Doors", true, function() return UnlockNearbyDoors_Enabled end, UnlockNearbyDoors_Enable, UnlockNearbyDoors_Disable, function() return k.unlockNearbyDoors end, function(val) k.unlockNearbyDoors=val end))
-    table.insert(self.CategoryFrames.Misc, createToggleRowFrame("Auto Open Doors", true, function() return OpenNearbyDoors_Enabled end, OpenNearbyDoors_Enable, OpenNearbyDoors_Disable, function() return k.openNearbyDoors end, function(val) k.openNearbyDoors=val end))
+    table.insert(self.CategoryFrames.Misc_Misc, createToggleRowFrame("Staff Detector", true, function() return AdminCheck_Enabled end, AdminCheck_Enable, AdminCheck_Disable, function() return k.adminCheck end, function(val) k.adminCheck=val end))
+    table.insert(self.CategoryFrames.Misc_Misc, createToggleRowFrame("Auto Pickup Money", true, function() return AutoPickupMoney_Enabled end, AutoPickupMoney_Enable, AutoPickupMoney_Disable, function() return k.autoPickupMoney end, function(val) k.autoPickupMoney=val end))
+    table.insert(self.CategoryFrames.Misc_Misc, createToggleRowFrame("No Fail Lockpick", true, function() return NoFailLockpick_Enabled end, NoFailLockpick_Enable, NoFailLockpick_Disable, function() return k.noFailLockpick end, function(val) k.noFailLockpick=val end))
+    table.insert(self.CategoryFrames.Misc_Misc, createToggleRowFrame("Auto Unlock Doors", true, function() return UnlockNearbyDoors_Enabled end, UnlockNearbyDoors_Enable, UnlockNearbyDoors_Disable, function() return k.unlockNearbyDoors end, function(val) k.unlockNearbyDoors=val end))
+    table.insert(self.CategoryFrames.Misc_Misc, createToggleRowFrame("Auto Open Doors", true, function() return OpenNearbyDoors_Enabled end, OpenNearbyDoors_Enable, OpenNearbyDoors_Disable, function() return k.openNearbyDoors end, function(val) k.openNearbyDoors=val end))
 
     -- Combat_Rage
     table.insert(self.CategoryFrames.Combat_Rage, createToggleRowFrame("Ragebot", true, function() return Ragebot_Enabled end, Ragebot_Enable, Ragebot_Disable, function() return k.ragebot end, function(val) k.ragebot=val end))
