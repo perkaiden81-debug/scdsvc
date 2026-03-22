@@ -2250,9 +2250,9 @@ if not getgenv().AimBotSettings then
     }
 end
 
--- 2. CREARE CERC FOV (Ca să nu dea eroare în buclă)
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 0.5
+-- 2. CREARE PĂTRAT FOV (Ca să nu dea eroare în buclă)
+local FOVCircle = Drawing.new("Square")
+FOVCircle.Thickness = 1
 FOVCircle.Color = Color3.fromRGB(130, 90, 255)
 FOVCircle.Filled = false
 FOVCircle.Transparency = 1
@@ -2289,9 +2289,9 @@ local function GetClosestTarget()
                         
                         if onScreen then
                             local screenPos = Vector2.new(pos.X, pos.Y)
-                            local distFromMouse = (screenPos - mousePos).Magnitude
+                            local distFromMouse = math.max(math.abs(screenPos.X - mousePos.X), math.abs(screenPos.Y - mousePos.Y))
                             
-                            -- DACĂ pixelul este în interiorul cercului FOV
+                            -- DACĂ pixelul este în interiorul FOV-ului (Pătrat)
                             if distFromMouse <= maxLimit then
                                 
                                 -- FORMULA DE PRIORITATE (Aici e magia):
@@ -2465,15 +2465,16 @@ local SACircle = nil
 function crFOVCircle()
     if SACircle then SACircle:Remove(); SACircle = nil end
     if SA.DrawCircle and Drawing then
-        SACircle = Drawing.new("Circle"); SACircle.Color = SA.FOVCol; SACircle.Filled = false
-        SACircle.Thickness = 0.5; SACircle.Radius = SA.DrawSize; SACircle.Visible = true; SACircle.Transparency = 1
+        SACircle = Drawing.new("Square"); SACircle.Color = SA.FOVCol; SACircle.Filled = false
+        SACircle.Thickness = 1; SACircle.Visible = true; SACircle.Transparency = 1
     end
 end
 
 function getValidT()
     if not SA.On then return nil end
     local Cam = workspace.CurrentCamera
-    local t = nil; local minD = math.huge; local centerPos = game:GetService("UserInputService"):GetMouseLocation()
+    local t = nil; local minD = math.huge
+    local centerPos = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
     local LP = game.Players.LocalPlayer
     for _, p in pairs(game.Players:GetPlayers()) do
         if p == LP then continue end; if not p.Character then continue end
@@ -2514,7 +2515,7 @@ function getValidT()
                 if limb:IsA("BasePart") then
                     local lsP, lsOnSc = Cam:WorldToViewportPoint(limb.Position)
                     if lsOnSc then
-                        local ld2m = (centerPos - Vector2.new(lsP.X, lsP.Y)).Magnitude
+                        local ld2m = math.max(math.abs(centerPos.X - lsP.X), math.abs(centerPos.Y - lsP.Y))
                         if ld2m < closestLimbDist then closestLimbDist = ld2m end
                     end
                 end
@@ -2538,8 +2539,10 @@ local SALoopConn = nil
 function updFOVCircle()
     local Cam = workspace.CurrentCamera
     if SACircle and SA.DrawCircle then
-        SACircle.Position = game:GetService("UserInputService"):GetMouseLocation()
-        SACircle.Radius = SA.DrawSize; SACircle.Visible = SA.On; SACircle.Color = SA.FOVCol
+        local centerPos = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
+        SACircle.Size = Vector2.new(SA.DrawSize * 2, SA.DrawSize * 2)
+        SACircle.Position = centerPos - Vector2.new(SA.DrawSize, SA.DrawSize)
+        SACircle.Visible = SA.On; SACircle.Color = SA.FOVCol
     end
 end
 
@@ -4013,7 +4016,7 @@ local function GetClosestTarget()
                         
                         if onScreen then
                             local screenPos = Vector2.new(pos.X, pos.Y)
-                            local distFromMouse = (screenPos - mousePos).Magnitude
+                            local distFromMouse = math.max(math.abs(screenPos.X - mousePos.X), math.abs(screenPos.Y - mousePos.Y))
                             
                             if distFromMouse <= maxLimit then
                                 local score = distFromMouse + (distInStuds * 2) 
@@ -4037,11 +4040,12 @@ game:GetService("RunService").RenderStepped:Connect(function()
     local UserInputService = game:GetService("UserInputService")
     local mouseLoc = UserInputService:GetMouseLocation()
     
-    -- Cerc FOV Camera
+    -- Pătrat FOV Camera
     if AimBotSettings.Enabled and AimBotSettings.ShowFOV then
         FOVCircle.Visible = true
-        FOVCircle.Radius = AimBotSettings.FOV or 100
-        FOVCircle.Position = mouseLoc
+        local size = AimBotSettings.FOV or 100
+        FOVCircle.Size = Vector2.new(size * 2, size * 2)
+        FOVCircle.Position = mouseLoc - Vector2.new(size, size)
     else
         FOVCircle.Visible = false
     end
@@ -4127,5 +4131,3 @@ game:GetService("RunService").RenderStepped:Connect(function()
         LockedTarget = nil
     end
 end)
-
-
