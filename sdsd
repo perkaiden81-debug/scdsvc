@@ -2330,17 +2330,17 @@ function cacheWeapons_NR()
         if type(v) == 'table' and rawget(v, 'EquipTime') then
             table.insert(NRSettings.WeaponCache, v)
             if not NRSettings.OriginalValues[v] then
-                NRSettings.OriginalValues[v] = {
-                    Recoil = v.Recoil,
-                    CameraRecoilingEnabled = v.CameraRecoilingEnabled,
-                    AngleX_Min = v.AngleX_Min,
-                    AngleX_Max = v.AngleX_Max,
-                    AngleY_Min = v.AngleY_Min,
-                    AngleY_Max = v.AngleY_Max,
-                    AngleZ_Min = v.AngleZ_Min,
-                    AngleZ_Max = v.AngleZ_Max,
-                    Spread = v.Spread
-                }
+                NRSettings.OriginalValues[v] = {}
+                if rawget(v, 'Recoil') ~= nil then NRSettings.OriginalValues[v].Recoil = v.Recoil end
+                if rawget(v, 'CameraRecoilingEnabled') ~= nil then NRSettings.OriginalValues[v].CameraRecoilingEnabled = v.CameraRecoilingEnabled end
+                if rawget(v, 'AngleX_Min') ~= nil then NRSettings.OriginalValues[v].AngleX_Min = v.AngleX_Min end
+                if rawget(v, 'AngleX_Max') ~= nil then NRSettings.OriginalValues[v].AngleX_Max = v.AngleX_Max end
+                if rawget(v, 'AngleY_Min') ~= nil then NRSettings.OriginalValues[v].AngleY_Min = v.AngleY_Min end
+                if rawget(v, 'AngleY_Max') ~= nil then NRSettings.OriginalValues[v].AngleY_Max = v.AngleY_Max end
+                if rawget(v, 'AngleZ_Min') ~= nil then NRSettings.OriginalValues[v].AngleZ_Min = v.AngleZ_Min end
+                if rawget(v, 'AngleZ_Max') ~= nil then NRSettings.OriginalValues[v].AngleZ_Max = v.AngleZ_Max end
+                if rawget(v, 'Spread') ~= nil then NRSettings.OriginalValues[v].Spread = v.Spread end
+                if rawget(v, 'MaxSpread') ~= nil then NRSettings.OriginalValues[v].MaxSpread = v.MaxSpread end
             end
         end
     end
@@ -2349,17 +2349,18 @@ end
 function applyGunMods_NR()
     for _, weapon in ipairs(NRSettings.WeaponCache) do
         if NRSettings.GunMods.NoRecoil then
-            weapon.Recoil = 0
-            weapon.CameraRecoilingEnabled = false
-            weapon.AngleX_Min = 0
-            weapon.AngleX_Max = 0
-            weapon.AngleY_Min = 0
-            weapon.AngleY_Max = 0
-            weapon.AngleZ_Min = 0
-            weapon.AngleZ_Max = 0
+            if rawget(weapon, 'Recoil') ~= nil then weapon.Recoil = 0 end
+            if rawget(weapon, 'CameraRecoilingEnabled') ~= nil then weapon.CameraRecoilingEnabled = false end
+            if rawget(weapon, 'AngleX_Min') ~= nil then weapon.AngleX_Min = 0 end
+            if rawget(weapon, 'AngleX_Max') ~= nil then weapon.AngleX_Max = 0 end
+            if rawget(weapon, 'AngleY_Min') ~= nil then weapon.AngleY_Min = 0 end
+            if rawget(weapon, 'AngleY_Max') ~= nil then weapon.AngleY_Max = 0 end
+            if rawget(weapon, 'AngleZ_Min') ~= nil then weapon.AngleZ_Min = 0 end
+            if rawget(weapon, 'AngleZ_Max') ~= nil then weapon.AngleZ_Max = 0 end
         end
         if NRSettings.GunMods.Spread then
-            weapon.Spread = NRSettings.GunMods.SpreadAmount
+            if rawget(weapon, 'Spread') ~= nil then weapon.Spread = NRSettings.GunMods.SpreadAmount end
+            if rawget(weapon, 'MaxSpread') ~= nil then weapon.MaxSpread = NRSettings.GunMods.SpreadAmount end
         end
     end
 end
@@ -2368,15 +2369,16 @@ function resetGunMods_NR()
     for weapon, values in pairs(NRSettings.OriginalValues) do
         if weapon then
             pcall(function()
-                weapon.Recoil = values.Recoil
-                weapon.CameraRecoilingEnabled = values.CameraRecoilingEnabled
-                weapon.AngleX_Min = values.AngleX_Min
-                weapon.AngleX_Max = values.AngleX_Max
-                weapon.AngleY_Min = values.AngleY_Min
-                weapon.AngleY_Max = values.AngleY_Max
-                weapon.AngleZ_Min = values.AngleZ_Min
-                weapon.AngleZ_Max = values.AngleZ_Max
-                weapon.Spread = values.Spread
+                if values.Recoil ~= nil then weapon.Recoil = values.Recoil end
+                if values.CameraRecoilingEnabled ~= nil then weapon.CameraRecoilingEnabled = values.CameraRecoilingEnabled end
+                if values.AngleX_Min ~= nil then weapon.AngleX_Min = values.AngleX_Min end
+                if values.AngleX_Max ~= nil then weapon.AngleX_Max = values.AngleX_Max end
+                if values.AngleY_Min ~= nil then weapon.AngleY_Min = values.AngleY_Min end
+                if values.AngleY_Max ~= nil then weapon.AngleY_Max = values.AngleY_Max end
+                if values.AngleZ_Min ~= nil then weapon.AngleZ_Min = values.AngleZ_Min end
+                if values.AngleZ_Max ~= nil then weapon.AngleZ_Max = values.AngleZ_Max end
+                if values.Spread ~= nil then weapon.Spread = values.Spread end
+                if values.MaxSpread ~= nil then weapon.MaxSpread = values.MaxSpread end
             end)
         end
     end
@@ -3516,7 +3518,7 @@ local EQR_UI = {}
 
 EQR_UI.Categories = { "Combat", "Movement", "Visuals", "Farming", "Misc" }
 EQR_UI.SubCategories = {
-    Combat = {"Aimbots", "Melee", "Rage", "Weapons"},
+    Combat = {"Aimbots", "Melee", "Rage"},
     Movement = {"Main"},
     Visuals = {"ESP", "World"},
     Farming = {"Farming"},
@@ -3539,7 +3541,6 @@ EQR_UI.KeyBinds = {
     adminCheck = nil,
     melee = nil,
     infiniteStamina = nil,
-    noRecoil = nil,
     esp = nil,
     aimbot = AimBotSettings.Keybind,
     invis = nil,
@@ -3881,14 +3882,7 @@ table.insert(self.CategoryFrames.Combat_Aimbots, createSliderRowFrame("Silent Ma
     SA.MaxDist = v 
 end))
 
-    -- Combat_Weapons
-    table.insert(self.CategoryFrames.Combat_Weapons, createToggleRowFrame("No Recoil", true, 
-    function() return NRSettings.Enabled end, 
-    function() enableNoRecoil() end, 
-    function() disableNoRecoil() end, 
-    function() return k.norecoil end, 
-    function(val) k.norecoil = val end
-))
+
 
     table.insert(self.CategoryFrames.Movement_Main, createToggleRowFrame("Fly", true, function() return FlySettings.On end, Fly_Enable, Fly_Disable, function() return k.fly end, function(val) k.fly=val; Fly_Bind=val end))
     table.insert(self.CategoryFrames.Movement_Main, createToggleRowFrame("Noclip", true, function() return Noclip_Enabled end, Noclip_Enable, Noclip_Disable, function() return k.noclip end, function(val) k.noclip=val; Noclip_Bind=val end))
