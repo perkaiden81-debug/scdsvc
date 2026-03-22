@@ -2932,6 +2932,7 @@ end
 
 --======================= WALLHACK (ESP) =========================--
 local ESP_Enabled = false
+local ESP_MaxDistance = 1000
 local espConnection = nil
 
 local function updESP()
@@ -2946,6 +2947,11 @@ local function updESP()
                 if ESP_Enabled and root and myRoot then
                     local distance = (root.Position - myRoot.Position).Magnitude
                     
+                    if distance > ESP_MaxDistance then
+                        if hl then hl:Destroy() end
+                        continue
+                    end
+                    
                     if not hl then
                         hl = Instance.new("Highlight")
                         hl.Name = "MyESP"
@@ -2956,14 +2962,9 @@ local function updESP()
                         hl.Parent = char
                     end
                     
-                    -- Optimized distance check (no Destroy on every frame)
-                    if distance <= 1000 then
-                        hl.Enabled = true
-                    else
-                        hl.Enabled = false
-                    end
+                    hl.Enabled = true
                 else
-                    if hl then hl.Enabled = false end
+                    if hl then hl:Destroy() end
                 end
             end
         end
@@ -3386,15 +3387,17 @@ local function createDropdownRowFrame(labelText, options, default, callback)
     dropBtn.Size = UDim2.new(0.5, 0, 0, 28)
     dropBtn.Position = UDim2.new(0.5, 0, 0, 3)
     dropBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-    dropBtn.Text = " " .. default
+    dropBtn.Text = "  " .. default
     dropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     dropBtn.Font = Enum.Font.GothamSemibold
     dropBtn.TextXAlignment = Enum.TextXAlignment.Left
     dropBtn.Parent = frame
     dropBtn.TextSize = 12
+    dropBtn.AutoButtonColor = false
     Instance.new("UICorner", dropBtn).CornerRadius = UDim.new(0, 4)
     local stroke = Instance.new("UIStroke", dropBtn)
     stroke.Color = Color3.fromRGB(45, 45, 55)
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
     local arrowIcon = Instance.new("TextLabel")
     arrowIcon.Size = UDim2.new(0, 20, 1, 0)
@@ -3403,9 +3406,10 @@ local function createDropdownRowFrame(labelText, options, default, callback)
     arrowIcon.Text = "▼"
     arrowIcon.TextColor3 = Color3.fromRGB(150, 150, 150)
     arrowIcon.Font = Enum.Font.Gotham
-    arrowIcon.TextSize = 12
+    arrowIcon.TextSize = 10
     arrowIcon.Parent = dropBtn
 
+    local targetHeight = math.clamp(#options * 28, 28, 140)
     local listHolder = Instance.new("ScrollingFrame")
     listHolder.Name = "ListHolder"
     listHolder.Parent = dropBtn
@@ -3413,10 +3417,10 @@ local function createDropdownRowFrame(labelText, options, default, callback)
     listHolder.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     listHolder.BorderSizePixel = 0
     listHolder.Position = UDim2.new(0, 0, 1, 4)
-    listHolder.Size = UDim2.new(1, 0, 0, math.clamp(#options * 28, 28, 140))
+    listHolder.Size = UDim2.new(1, 0, 0, 0) -- Starts closed (0 height)
     listHolder.ZIndex = 15
     listHolder.ScrollBarThickness = 2
-    listHolder.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 90)
+    listHolder.ScrollBarImageColor3 = Color3.fromRGB(115, 90, 250)
     listHolder.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
     Instance.new("UICorner", listHolder).CornerRadius = UDim.new(0, 4)
     local listStroke = Instance.new("UIStroke", listHolder)
@@ -3434,32 +3438,71 @@ local function createDropdownRowFrame(labelText, options, default, callback)
         optBtn.BorderSizePixel = 0
         optBtn.Text = "  " .. option
         optBtn.TextXAlignment = Enum.TextXAlignment.Left
-        optBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        optBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
         optBtn.Font = Enum.Font.GothamMedium
         optBtn.TextSize = 12
         optBtn.Parent = listHolder
         optBtn.ZIndex = 16
+        optBtn.AutoButtonColor = false
 
         optBtn.MouseEnter:Connect(function()
             TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 40, 50), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
         end)
         optBtn.MouseLeave:Connect(function()
-            TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20, 20, 25), TextColor3 = Color3.fromRGB(200, 200, 200)}):Play()
+            TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20, 20, 25), TextColor3 = Color3.fromRGB(180, 180, 180)}):Play()
         end)
 
         optBtn.MouseButton1Click:Connect(function()
-            dropBtn.Text = " " .. option
+            dropBtn.Text = "  " .. option
             isOpen = false
-            listHolder.Visible = false
-            TweenService:Create(arrowIcon, TweenInfo.new(0.2), {Rotation = 0}):Play()
+            
+            TweenService:Create(arrowIcon, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0, TextColor3 = Color3.fromRGB(150, 150, 150)}):Play()
+            TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(45, 45, 55)}):Play()
+            
+            local closeTween = TweenService:Create(listHolder, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 0)})
+            closeTween:Play()
+            closeTween.Completed:Connect(function()
+                if not isOpen then listHolder.Visible = false end
+            end)
+            
             callback(option)
         end)
     end
 
+    dropBtn.MouseEnter:Connect(function()
+        if not isOpen then
+            TweenService:Create(stroke, TweenInfo.new(0.15), {Color = Color3.fromRGB(80, 80, 90)}):Play()
+        end
+    end)
+    
+    dropBtn.MouseLeave:Connect(function()
+        if not isOpen then
+            TweenService:Create(stroke, TweenInfo.new(0.15), {Color = Color3.fromRGB(45, 45, 55)}):Play()
+        end
+    end)
+
     dropBtn.MouseButton1Click:Connect(function()
         isOpen = not isOpen
-        listHolder.Visible = isOpen
-        TweenService:Create(arrowIcon, TweenInfo.new(0.2), {Rotation = isOpen and 180 or 0}):Play()
+        
+        TweenService:Create(arrowIcon, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Rotation = isOpen and 180 or 0,
+            TextColor3 = isOpen and Color3.fromRGB(115, 90, 250) or Color3.fromRGB(150, 150, 150)
+        }):Play()
+        
+        TweenService:Create(stroke, TweenInfo.new(0.25), {
+            Color = isOpen and Color3.fromRGB(115, 90, 250) or Color3.fromRGB(45, 45, 55)
+        }):Play()
+
+        if isOpen then
+            listHolder.Visible = true
+            TweenService:Create(listHolder, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+        else
+            local closeTween = TweenService:Create(listHolder, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 0)})
+            closeTween:Play()
+            closeTween.Completed:Connect(function()
+                if not isOpen then listHolder.Visible = false end
+            end)
+        end
     end)
 
     return frame
@@ -3853,6 +3896,9 @@ end))
 
     -- Visuals
     table.insert(self.CategoryFrames.Visuals_ESP, createToggleRowFrame("Player ESP", true, function() return ESP_Enabled end, ESP_Enable, ESP_Disable, function() return k.esp end, function(val) k.esp = val end))
+    table.insert(self.CategoryFrames.Visuals_ESP, createSliderRowFrame("Max Distance", 100, 1000, 1000, function(v) 
+        ESP_MaxDistance = v 
+    end))
     table.insert(self.CategoryFrames.Visuals_ESP, createToggleRowFrame("Safe/Register ESP", true, function() return BredMakurz_Enabled end, BredMakurz_Enable, BredMakurz_Disable, function() return k.safeESP end, function(val) k.safeESP=val end))
 
     table.insert(self.CategoryFrames.Visuals_World, createToggleRowFrame("Invisibility", true, _G.IsInvisEnabled, _G.Invis_Enable, _G.Invis_Disable, function() return k.invis end, function(val) k.invis=val end))
